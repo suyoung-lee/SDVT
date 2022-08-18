@@ -23,7 +23,7 @@ def moving_average(data, M=5):
 
 
 listdirs_ml10 = listdirs('logs/logs_ML10Env-v2')
-seed_list = [10,11]
+seed_list = [10,11,12,13]
 #seed_list = [17]
 dir_ml10=[]
 for seed in seed_list:
@@ -33,7 +33,7 @@ for seed in seed_list:
 print(dir_ml10)
 
 #iter_list = [0,1,2,3,4,5,6]
-iter_list = [26]
+iter_list = [60]
 task_successes = np.zeros((len(iter_list), 15,len(seed_list))) #first 10 rows are train
 frame_list = []
 iter_list_ = []

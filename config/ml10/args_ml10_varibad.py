@@ -8,7 +8,7 @@ def get_args(rest_args):
     # --- GENERAL ---
 
     # training parameters
-    parser.add_argument('--num_frames', type=int, default=3e8, help='number of frames to train')
+    parser.add_argument('--num_frames', type=int, default=4e8, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
     parser.add_argument('--exp_label', default='varibad', help='label (typically name of method)')
     parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
@@ -78,8 +78,6 @@ def get_args(rest_args):
     # --- VAE TRAINING ---
 
     # general
-    parser.add_argument('--vae_mixture_num', type=int, default=2,
-                        help='how many mixture gaussian to use')
     parser.add_argument('--lr_vae', type=float, default=0.001)
     parser.add_argument('--size_vae_buffer', type=int, default=10000,
                         help='how many trajectories (!) to keep in VAE buffer')
@@ -108,6 +106,16 @@ def get_args(rest_args):
                         help='split batches up by task (to save memory or if tasks are of different length)')
     parser.add_argument('--split_batches_by_elbo', type=boolean_argument, default=False,
                         help='split batches up by elbo term (to save memory of if ELBOs are of different length)')
+
+    #Gaussian mixture
+    parser.add_argument('--vae_mixture_num', type=int, default=1,
+                        help='how many mixture gaussian to use, 1 means unimodal')
+    parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
+                        help='when using Gaussian mixture')
+    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
+                        help='how many mixture gaussian to use, 1 means unimodal')
+    parser.add_argument('--gumbel_temperature', type=float, default=1.0,
+                        help='Gumbel softmax temperature, when nearly 0, hardmax')
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)

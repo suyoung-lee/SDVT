@@ -118,7 +118,7 @@ def evaluate_ml10(args,
              tasks,
              encoder=None,
              num_episodes=None,
-             test = False, task_list = None
+             test = False, task_list = None, save_episode_probs=False
              ):
     env_name = args.env_name
     if test:
@@ -168,8 +168,15 @@ def evaluate_ml10(args,
             latent_mean = prior_mu
             latent_logvar = torch.log(prior_var + 1e-8)
             hidden_state = prior_hidden_state
+            if save_episode_probs:
+                episode_probs = torch.zeros((num_processes, num_episodes + 1, num_steps, args.vae_mixture_num)).to(device)
+            else:
+                episode_probs= None
+
         else:
             latent_sample, latent_mean, latent_logvar, hidden_state = encoder.prior(num_processes)
+            prob = None
+            episode_probs = None
     else:
         latent_sample = latent_mean = latent_logvar = hidden_state = None
 
@@ -207,6 +214,9 @@ def evaluate_ml10(args,
                                                                                                   done=None,
                                                                                                   hidden_state=hidden_state,
                                                                       vae_mixture_num=args.vae_mixture_num)
+                    if save_episode_probs:
+                        episode_probs[:, episode_idx, step_idx , :] = prob.clone()
+
                 else:
                     latent_sample, latent_mean, latent_logvar, hidden_state = utl.update_encoding(encoder=encoder,
                                                                                                   next_obs=state,
@@ -214,6 +224,7 @@ def evaluate_ml10(args,
                                                                                                   reward=rew_raw,
                                                                                                   done=None,
                                                                                                   hidden_state=hidden_state)
+
             # add rewards
             returns_per_episode[range(num_processes), task_count] += rew_raw.view(-1)
 
@@ -225,8 +236,10 @@ def evaluate_ml10(args,
                 state, belief, task = utl.reset_env(envs, args, indices=done_indices, state=state)
 
     envs.close()
-
-    return returns_per_episode[:, :num_episodes].cpu().numpy(), latent_mean.cpu().numpy(), latent_logvar.cpu().numpy(), np.array(successes), prob.cpu().numpy()
+    if save_episode_probs:
+        episode_probs = episode_probs[:, :num_episodes, :, :].detach().cpu().numpy()
+    return returns_per_episode[:, :num_episodes].detach().cpu().numpy(), latent_mean.detach().cpu().numpy(), \
+                                                         latent_logvar.detach().cpu().numpy(), np.array(successes), prob.detach().cpu().numpy(), episode_probs
 
 def visualise_behaviour(args,
                         policy,

@@ -279,32 +279,6 @@ class VaribadVAEMixture:
         else:
             return loss_task
 
-    def compute_kl_loss(self, latent_mean, latent_logvar, elbo_indices):
-        # -- KL divergence
-        if self.args.kl_to_gauss_prior:
-            kl_divergences = (- 0.5 * (1 + latent_logvar - latent_mean.pow(2) - latent_logvar.exp()).sum(dim=-1))
-        else:
-            gauss_dim = latent_mean.shape[-1]
-            # add the gaussian prior
-            all_means = torch.cat((torch.zeros(1, *latent_mean.shape[1:]).to(device), latent_mean))
-            all_logvars = torch.cat((torch.zeros(1, *latent_logvar.shape[1:]).to(device), latent_logvar))
-            # https://arxiv.org/pdf/1811.09975.pdf
-            # KL(N(mu,E)||N(m,S)) = 0.5 * (log(|S|/|E|) - K + tr(S^-1 E) + (m-mu)^T S^-1 (m-mu)))
-            mu = all_means[1:]
-            m = all_means[:-1]
-            logE = all_logvars[1:]
-            logS = all_logvars[:-1]
-            kl_divergences = 0.5 * (torch.sum(logS, dim=-1) - torch.sum(logE, dim=-1) - gauss_dim + torch.sum(
-                1 / torch.exp(logS) * torch.exp(logE), dim=-1) + ((m - mu) / torch.exp(logS) * (m - mu)).sum(dim=-1))
-
-        # returns, for each ELBO_t term, one KL (so H+1 kl's)
-        if elbo_indices is not None:
-            batchsize = kl_divergences.shape[-1]
-            task_indices = torch.arange(batchsize).repeat(self.args.vae_subsample_elbos)
-            kl_divergences = kl_divergences[elbo_indices, task_indices].reshape((self.args.vae_subsample_elbos, batchsize))
-
-        return kl_divergences
-
     def compute_loss(self, latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_actions,
                      vae_rewards, vae_tasks, trajectory_lens, y, z, mu, var, logits, prob):
         """
@@ -443,24 +417,10 @@ class VaribadVAEMixture:
         else:
             task_reconstruction_loss = 0
 
-        if not self.args.disable_kl_term:
-            # compute the KL term for each ELBO term of the current trajectory
-            # shape: [num_elbo_terms] x [num_trajectories]
-            kl_loss = self.compute_kl_loss(latent_mean, latent_logvar, elbo_indices)
-            # avg/sum the elbos
-            if self.args.vae_avg_elbo_terms:
-                kl_loss = kl_loss.mean(dim=0)
-            else:
-                kl_loss = kl_loss.sum(dim=0)
-            # average across tasks
-            kl_loss = kl_loss.sum(dim=0).mean()
-        else:
-            kl_loss = 0
-
         loss_gauss = self.gaussian_loss(z, mu, var, y_mu, y_var) #TODO subsample inputs for these losses
         loss_cat = -self.entropy(logits, prob) - np.log(1.0/self.args.vae_mixture_num) #uniform entropy
 
-        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, kl_loss, loss_gauss, loss_cat
+        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, loss_gauss, loss_cat
 
     def compute_loss_split_batches_by_elbo(self, latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_actions,
                                            vae_rewards, vae_tasks, trajectory_lens):
@@ -571,15 +531,7 @@ class VaribadVAEMixture:
         else:
             task_reconstruction_loss = 0
 
-        if not self.args.disable_kl_term:
-            # compute the KL term for each ELBO term of the current trajectory
-            kl_loss = self.compute_kl_loss(latent_mean, latent_logvar, None)
-            # sum the elbos, average across tasks
-            kl_loss = kl_loss.sum(dim=0).mean()
-        else:
-            kl_loss = 0
-
-        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, kl_loss
+        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss
 
     def compute_vae_loss(self, update=False, pretrain_index=None):
         """ Returns the VAE loss """
@@ -618,24 +570,16 @@ class VaribadVAEMixture:
         else:
             losses = self.compute_loss(latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_actions,
                                        vae_rewards, vae_tasks, trajectory_lens, y, z, mu, var, logits, prob)
-        rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, kl_loss, gauss_loss, cat_loss = losses
-        #print('reconstruction_loss', rew_reconstruction_loss, rew_reconstruction_loss.grad)
-        #print('kl loss', kl_loss, kl_loss.grad)
-        #print('gauss_loss', gauss_loss, gauss_loss.grad)
-        #print('cat_loss', cat_loss, cat_loss.grad)
+        rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss = losses
 
-        # VAE loss = KL loss + reward reconstruction + state transition reconstruction
         # take average (this is the expectation over p(M))
         loss = (self.args.rew_loss_coeff * rew_reconstruction_loss +
                 self.args.state_loss_coeff * state_reconstruction_loss +
                 self.args.task_loss_coeff * task_reconstruction_loss +
-                #self.args.kl_weight * kl_loss +
-                1.0 * gauss_loss +
-                1.0 * cat_loss).mean()
+                self.args.gauss_loss_coeff * gauss_loss +
+                self.args.cat_loss_coeff * cat_loss).mean()
 
         # make sure we can compute gradients
-        if not self.args.disable_kl_term:
-            assert kl_loss.requires_grad
         if self.args.decode_reward:
             assert rew_reconstruction_loss.requires_grad
         if self.args.decode_state:
@@ -664,14 +608,12 @@ class VaribadVAEMixture:
             # update
             self.optimiser_vae.step()
 
-        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, kl_loss,
-                 pretrain_index)
+        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, pretrain_index)
 
 
         return elbo_loss
 
-    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, kl_loss,
-            pretrain_index=None):
+    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, pretrain_index=None):
 
         if pretrain_index is None:
             curr_iter_idx = self.get_iter_idx()
@@ -687,6 +629,4 @@ class VaribadVAEMixture:
             if self.args.decode_task:
                 self.logger.add('vae_losses/task_reconstr_err', task_reconstruction_loss.mean(), curr_iter_idx)
 
-            if not self.args.disable_kl_term:
-                self.logger.add('vae_losses/kl', kl_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/sum', elbo_loss, curr_iter_idx)

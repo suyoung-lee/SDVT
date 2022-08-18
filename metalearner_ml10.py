@@ -420,29 +420,34 @@ class MetaLearnerML10:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = self.envs.venv.ret_rms if self.args.norm_rew_for_policy else None
             if (self.iter_idx + 1) % (10*self.args.eval_interval) == 0:
-                total_parametric_num = 10
+                total_parametric_num = 50
             else:
                 total_parametric_num = 10
+
             num_worker = 10
             returns_array = np.zeros((15,total_parametric_num,num_worker))
             latent_means_array = np.zeros((15,total_parametric_num, self.args.latent_dim))
             latent_logvars_array = np.zeros((15,total_parametric_num, self.args.latent_dim))
             successes_array = np.zeros((15, total_parametric_num))
             if self.args.vae_mixture_num>1:
+                save_episode_probs = (self.iter_idx + 1) % (20 * self.args.eval_interval) == 0
                 probs_array = np.zeros((15, total_parametric_num, self.args.vae_mixture_num))
+                if save_episode_probs:
+                    episode_probs_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task, self.envs._max_episode_steps, self.args.vae_mixture_num))
             for task_class in range(15):
                 for parametric_num in range(total_parametric_num//num_worker):
                     task_list = np.concatenate((np.expand_dims(np.repeat(task_class,num_worker),axis=1),
                                                 np.expand_dims(np.arange(num_worker*parametric_num,num_worker*(parametric_num+1)),axis=1)), axis=1)
                     if self.args.vae_mixture_num>1:
-                        returns_per_episode, latent_mean, latent_logvar, successes, prob = utl_eval.evaluate_ml10(args=self.args,
+                        returns_per_episode, latent_mean, latent_logvar, successes, prob, episode_probs = utl_eval.evaluate_ml10(args=self.args,
                                                                 policy=self.policy,
                                                                 ret_rms=ret_rms,
                                                                 encoder=self.vae.encoder,
                                                                 iter_idx=self.iter_idx,
                                                                 tasks=None,
                                                                 test=False,
-                                                                task_list= task_list
+                                                                task_list= task_list,
+                                                                save_episode_probs=save_episode_probs
                                                                 )
                     else:
                         returns_per_episode, latent_mean, latent_logvar, successes = utl_eval.evaluate_ml10(args=self.args,
@@ -461,6 +466,8 @@ class MetaLearnerML10:
                     successes_array[task_class, parametric_num*num_worker:(parametric_num+1)*num_worker] = successes
                     if self.args.vae_mixture_num>1:
                         probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker,:] = prob
+                        if save_episode_probs:
+                            episode_probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :, :, :] = episode_probs
 
                     #print(task_class, parametric_num, returns_per_episode, successes)
 
@@ -483,7 +490,10 @@ class MetaLearnerML10:
             np.save('{}/{}/latent_means.npy'.format(self.logger.full_output_folder, self.iter_idx), latent_means_array)
             np.save('{}/{}/latent_logvars.npy'.format(self.logger.full_output_folder, self.iter_idx), latent_logvars_array)
             np.save('{}/{}/successes.npy'.format(self.logger.full_output_folder, self.iter_idx), successes_array)
-            np.save('{}/{}/probs.npy'.format(self.logger.full_output_folder, self.iter_idx), probs_array)
+            if self.args.vae_mixture_num > 1:
+                np.save('{}/{}/probs.npy'.format(self.logger.full_output_folder, self.iter_idx), probs_array)
+                if save_episode_probs:
+                    np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx), episode_probs_array)
 
         # --- save models ---
         if (self.iter_idx + 1) % self.args.save_interval == 0:

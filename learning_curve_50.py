@@ -20,11 +20,12 @@ def moving_average(data, M=5):
 
 
 listdirs_ml10 = listdirs('logs/logs_ML10Env-v2')
-seed_list = range(10,12)
+seed_list = range(10,14)
+date = '12:08'
 dir_ml10=[]
 for seed in seed_list:
     for dir in listdirs_ml10:
-        if "varibad_"+str(seed)+'_' in dir:
+        if "varibad_"+str(seed)+'__'+date in dir:
             dir_ml10.append(dir)
 print(dir_ml10)
 
@@ -49,6 +50,7 @@ for seed in range(len(seed_list)):
         iter_num+=1
 
 frame_list = np.array(df['frames'][:min_iter].values.astype(np.int))
+print(frame_list)
 print(task_successes)
 
 train_mean = 100*np.mean(np.mean(task_successes[:,:10,:], axis=1),axis=1)

@@ -24,17 +24,18 @@ def moving_average(data, M=5):
 
 
 listdirs_ml10 = listdirs('logs/logs_ML10Env-v2')
-seed_list = [10,11]
+seed_list = [10, 11, 12, 13]
+date = '12:08'
 #seed_list = [17]
 dir_ml10=[]
 for seed in seed_list:
     for dir in listdirs_ml10:
-        if "varibad_"+str(seed)+'_' in dir:
+        if "varibad_"+str(seed)+'__'+date in dir:
             dir_ml10.append(dir)
 print(dir_ml10)
 
 #iter_list = [0,1,2,3,4,5,6]
-iter_list = [32]
+iter_list = [80]
 task_successes = np.zeros((len(iter_list), 15,len(seed_list))) #first 10 rows are train
 frame_list = []
 iter_list_ = []
@@ -68,27 +69,43 @@ for seed in range(len(seed_list)):
         class_num =np.shape(data_)[2]
         taskwise_entropy = np.mean(entropy(data_+1e-20,axis=2),axis=1)
         classified = np.argmax(data_,axis=2)
+        mean_softmax = np.mean(data_, axis=1)
         print(classified)
 
-        fig = plt.figure(figsize=(6,8))
-        axes = []
-        for i in range(3):
-            axes.append(fig.add_subplot(3,1,i+1))
-        axes[0].set_title('Task classifier K: {:d}, seed: {:d}, {:d} subtasks, {:d}M steps'.format(class_num, seed_list[seed],parametric_num, int((frame_list[iter]+1)/1e6)))
+        fig, axes = plt.subplots(4,1, figsize=(8,10), gridspec_kw={'height_ratios': [1, 1,2.0,2.0]})
+
         #taskwise success
         axes[0].bar(range(1, 16), 100 * task_successes[iter,:,seed], alpha=0.5, color=color_list)
-        axes[0].set_ylabel('Success Rate (%)')
+        axes[0].set_ylabel('50 subtasks \n Success Rate (%)')
+        axes[0].set_ylim(0, 100)
         axes[0].set_xticks(range(1, 16))
+        axes[0].set_xlim(0.5,15.5)
+        axes[0].set_title('Task classifier K: {:d}, seed: {:d}, {:d} subtasks, {:d}M steps \n train: {:.1f}%, test {:.1f}%'.format(
+            class_num, seed_list[seed],parametric_num, int((frame_list[iter]+1)/1e6), 100*train_success, 100*test_success))
 
-        axes[1].bar(range(1, 16),taskwise_entropy, alpha=0.5, color=color_list)
-        axes[1].set_ylabel('Mean entropy of y')
+        #axes[1].bar(range(1, 16),taskwise_entropy, yerr=np.std(entropy(data_+1e-20,axis=2),axis=1), alpha=0.5, color=color_list)
+        #axes[1].set_ylabel('Mean entropy of y')
+        #axes[1].set_xticks(range(1, 16))
+        #axes[1].set_xlim(0.5, 15.5)
+
+        axes[1].bar(range(1, 16),np.mean(np.max(data_,axis=2),axis=1), yerr=np.std(np.max(data_,axis=2),axis=1) , alpha=0.5, color=color_list)
+        axes[1].set_ylabel('Mean_subtasks \n Max y')
+        axes[1].set_ylim(0.0, 1.0)
         axes[1].set_xticks(range(1, 16))
+        axes[1].set_xlim(0.5, 15.5)
 
+        sns.heatmap(np.flip(np.transpose(mean_softmax),0), ax=axes[2], vmin=0, vmax=1.0, annot=True, fmt='.2f', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(10, 0, -1))
+        axes[2].set_ylabel('Mean_subtasks \n y')
+
+        heatmap_data = np.zeros((class_num,15), dtype=int)
         for task in range(15):
-            axes[2].scatter(x=[task+1]*np.shape(classified)[1], y=classified[task], color = palette[task], alpha=0.1)
-        axes[2].set_xticks(range(1,16))
-        axes[2].set_xlabel('Task Index')
-        axes[2].set_ylabel('Classified (argmax y)')
+            for class_ in range(class_num):
+                heatmap_data[class_, task] = np.count_nonzero(classified[task,:]==class_)
+
+        sns.heatmap(np.flip(heatmap_data,0),ax=axes[3], vmin=0, vmax=50, annot=True, fmt='d', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(10, 0, -1))
+        axes[3].set_xlabel('Task Index')
+        axes[3].set_ylabel('50 subtasks \n argmax y')
+        fig.tight_layout()
 
         plt.savefig('plots/Task_classified/Task_classifier_K_{:d}_seed_{:d}_{:d}subtasks_{:d}M_steps.png'.format(class_num, seed_list[seed],parametric_num, int((frame_list[iter]+1)/1e6)))
         plt.show()

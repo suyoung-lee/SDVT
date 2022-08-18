@@ -271,7 +271,7 @@ class RNNEncoder_mixture(nn.Module):
         gru_h_reshaped = torch.reshape(gru_h, (shape0*shape1,shape2)) #procsx256 or (5000batchsize)x256
         #logits, prob, y = self.qyx(gru_h_reshaped, temperature = 1.0, hard = 0) #10xclass or (5000batchsize)xclass
 
-        logits, prob, y = self.qyx(gru_h_reshaped, temperature = 1.0, hard = 0) #10xclass or (5000batchsize)xclass
+        logits, prob, y = self.qyx(gru_h_reshaped, temperature = self.args.gumbel_temperature, hard = 0) #10xclass or (5000batchsize)xclass
         #print(gru_h.size(),logits.size(),prob.size(),y.size())
         # q(z|x,y)
         mu, var, z = self.qzxy(gru_h_reshaped, y) #procsx5 or (5000batchsize)xlatent_dim

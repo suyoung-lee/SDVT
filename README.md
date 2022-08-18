@@ -105,4 +105,3 @@ Since actions/rewards aren't available at the first time step,
 another option would be to just fill them with zeros.
 - I added an example environment with empty methods in `environments/example_env.py`,
 if you want to know what an environment should do.
-# ml10
