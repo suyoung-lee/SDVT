@@ -22,20 +22,26 @@ def moving_average(data, M=5):
     data = np.convolve(temp_data, np.ones(M) / M, mode='valid')
     return data
 
+seed_list=[10,11]
+listdirs_ml10 = listdirs('logs/logs_ML10Env-v2/')
+dir_ml10 = []
+for dir in listdirs_ml10:
+    if ('varibad_10__29:08_17:19:43' in dir) or ('varibad_11__30:08_09:34:16' in dir):
+        dir_ml10.append(dir)
+print(dir_ml10)
 
+'''
 listdirs_ml10 = listdirs('logs/logs_ML10Env-v2')
-seed_list = [10, 11, 12, 13]
-date = '12:08'
-#seed_list = [17]
+seed_list = range(10,14)
 dir_ml10=[]
 for seed in seed_list:
     for dir in listdirs_ml10:
-        if "varibad_"+str(seed)+'__'+date in dir:
+        if ('varibad_10__22:08_17:51:31' in dir) or ('varibad_11__22:08_17:51:41' in dir) or ('varibad_12__22:08_17:51:52' in dir) or ('varibad_13__22:08_17:52:06' in dir):
             dir_ml10.append(dir)
 print(dir_ml10)
-
+'''
 #iter_list = [0,1,2,3,4,5,6]
-iter_list = [80]
+iter_list = [40]
 task_successes = np.zeros((len(iter_list), 15,len(seed_list))) #first 10 rows are train
 frame_list = []
 iter_list_ = []
@@ -94,7 +100,7 @@ for seed in range(len(seed_list)):
         axes[1].set_xticks(range(1, 16))
         axes[1].set_xlim(0.5, 15.5)
 
-        sns.heatmap(np.flip(np.transpose(mean_softmax),0), ax=axes[2], vmin=0, vmax=1.0, annot=True, fmt='.2f', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(10, 0, -1))
+        sns.heatmap(np.flip(np.transpose(mean_softmax),0), ax=axes[2], vmin=0, vmax=1.0, annot=True, fmt='.2f', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(class_num, 0, -1))
         axes[2].set_ylabel('Mean_subtasks \n y')
 
         heatmap_data = np.zeros((class_num,15), dtype=int)
@@ -102,10 +108,11 @@ for seed in range(len(seed_list)):
             for class_ in range(class_num):
                 heatmap_data[class_, task] = np.count_nonzero(classified[task,:]==class_)
 
-        sns.heatmap(np.flip(heatmap_data,0),ax=axes[3], vmin=0, vmax=50, annot=True, fmt='d', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(10, 0, -1))
+        sns.heatmap(np.flip(heatmap_data,0),ax=axes[3], vmin=0, vmax=50, annot=True, fmt='d', cmap = 'viridis', cbar=False, xticklabels=range(1, 16),yticklabels=range(class_num, 0, -1))
         axes[3].set_xlabel('Task Index')
         axes[3].set_ylabel('50 subtasks \n argmax y')
-        fig.tight_layout()
+
+
 
         plt.savefig('plots/Task_classified/Task_classifier_K_{:d}_seed_{:d}_{:d}subtasks_{:d}M_steps.png'.format(class_num, seed_list[seed],parametric_num, int((frame_list[iter]+1)/1e6)))
         plt.show()

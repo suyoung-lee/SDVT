@@ -8,6 +8,7 @@ import warnings
 
 import numpy as np
 import torch
+import json
 
 # get configs
 from config.gridworld import \
@@ -29,11 +30,15 @@ from environments.parallel_envs import make_vec_envs
 from learner import Learner
 from metalearner import MetaLearner
 from metalearner_ml10 import MetaLearnerML10
-
+from metaeval_ml10 import MetaEvalML10
+from metalearner_ml10_post import MetaLearnerML10Post
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--env-type', default='gridworld_varibad')
+    parser.add_argument('--load-dir', default=None)
+    parser.add_argument('--load-iter', default=None)
+    parser.add_argument('--render', default=False)
     args, rest_args = parser.parse_known_args()
     env = args.env_type
 
@@ -126,8 +131,27 @@ def main():
         args = args_humanoid_dir_rl2.get_args(rest_args)
 
     # ml10
-    elif env == 'ml10':
-        args = args_ml10_varibad.get_args(rest_args)
+    elif env in ['ml10','ml10-eval', 'ml10-post']:
+        load_dir = args.load_dir
+        load_iter = args.load_iter
+        render = args.render
+        if env == 'ml10':
+            if args.load_dir is None:
+                args = args_ml10_varibad.get_args(rest_args)
+                args.load_dir = None
+            else:
+                with open(load_dir + 'config.json', 'r') as f:
+                    args.__dict__ = json.load(f)
+        elif env in ['ml10-eval', 'ml10-post']:
+            with open(load_dir + 'config.json', 'r') as f:
+                args.__dict__ = json.load(f)
+            if render:
+                args.env_name = 'ML10RENDEREnv-v2'
+            #args = args_ml10_varibad.get_args(rest_args)
+        args.load_dir = load_dir
+        args.load_iter = load_iter
+        args.render = render
+        print(args)
     else:
         raise Exception("Invalid Environment")
 
@@ -172,6 +196,12 @@ def main():
 
         if env == 'ml10':
             learner = MetaLearnerML10(args)
+        elif env == 'ml10-eval':
+            args.results_log_dir = args.results_log_dir + '_eval'
+            learner = MetaEvalML10(args)
+        elif env == 'ml10-post':
+            args.results_log_dir = args.results_log_dir + '_post'
+            learner = MetaLearnerML10Post(args)
         elif args.disable_metalearner:
             # If `disable_metalearner` is true, the file `learner.py` will be used instead of `metalearner.py`.
             # This is a stripped down version without encoder, decoder, stochastic latent variables, etc.

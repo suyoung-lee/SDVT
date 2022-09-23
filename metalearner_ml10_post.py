@@ -25,19 +25,26 @@ torch.autograd.set_detect_anomaly(True)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class MetaLearnerML10:
+class MetaLearnerML10Post:
     """
     Meta-Learner class with the main training loop for variBAD.
     """
     def __init__(self, args):
 
         self.args = args
+        self.args.post_period = 2 # every after 9 real tasks, update with 1 imaginary
+        self.total_period = self.args.post_period * self.args.max_rollouts_per_task
+        self.args.num_virtual_skills = 2
+        if not hasattr(self.args, 'dropout_rate'):
+            self.args.dropout_rate = 0.0
+
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
         # calculate number of updates and keep count of frames/iterations
         self.num_updates = int(args.num_frames) // args.policy_num_steps // args.num_processes
-        self.frames = 0
-        self.iter_idx = -1
+        self.iter_idx = int(self.args.load_iter)
+        self.frames = (int(self.args.load_iter)+1) * self.args.policy_num_steps * self.args.num_processes
+        self.recent_train_success = np.zeros(10)
 
         # initialise tensorboard logger
         self.logger = TBLogger(self.args, self.args.exp_label)
@@ -52,7 +59,7 @@ class MetaLearnerML10:
 
 
         # initialise environments
-        self.envs = make_vec_envs(env_name=args.env_name, seed=args.seed, num_processes=args.num_processes,
+        self.envs = make_vec_envs(env_name='ML10Env-v2', seed=args.seed, num_processes=args.num_processes,
                                   gamma=args.policy_gamma, device=device,
                                   episodes_per_task=self.args.max_rollouts_per_task,
                                   normalise_rew=args.norm_rew_for_policy, ret_rms=None,
@@ -62,6 +69,7 @@ class MetaLearnerML10:
         # calculate what the maximum length of the trajectories is
         self.args.max_trajectory_len = self.envs._max_episode_steps
         self.args.max_trajectory_len *= self.args.max_rollouts_per_task
+
 
         # get policy input dimensions
         self.args.state_dim = self.envs.observation_space.shape[0]
@@ -195,12 +203,26 @@ class MetaLearnerML10:
 
         return policy
 
+    def generate_dirichlet(self, num_virtual_skills, allow_smaller = False):
+        if allow_smaller:
+            num_virtual_skills = random.choice(range(1,num_virtual_skills+1))
+            index = random.sample(range(self.args.vae_mixture_num), num_virtual_skills)
+        else:
+            index = random.sample(range(self.args.vae_mixture_num), num_virtual_skills)
+        alpha = torch.zeros(self.args.num_processes,self.args.vae_mixture_num)
+        alpha[:,index]=1.0
+        y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
+        return y_dist
+
     def train(self):
         """ Main Meta-Training loop """
         start_time = time.time()
 
         # reset environments
         prev_state, belief, task = utl.reset_env(self.envs, self.args)
+        virtual_init_state = prev_state.clone()
+        y_dist = self.generate_dirichlet(num_virtual_skills = self.args.num_virtual_skills, allow_smaller = False)
+        y_intercept = y_dist.sample().to(device)
 
         # insert initial observation / embeddings to rollout storage
         self.policy_storage.prev_state[0].copy_(prev_state)
@@ -208,10 +230,15 @@ class MetaLearnerML10:
         # log once before training
         with torch.no_grad():
             self.log(None, None, start_time)
-
-        for self.iter_idx in range(self.num_updates):
-            print("="*10, self.iter_idx, "="*10)
-            prev_time = time.time()
+        self.iter_idx += 1 # number of interactions with the real environment
+        self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
+        while self.iter_idx < self.num_updates:
+            if self.virtual_iter_idx%self.total_period in range(self.args.max_rollouts_per_task):
+                virtual = True
+                if self.virtual_iter_idx%self.args.max_rollouts_per_task==0:
+                    virtual_init_state = prev_state.clone()  #Reuse this state for every initial -->TODO1: sample from buffer
+            else:
+                virtual = False
             # First, re-compute the hidden states given the current rollouts (since the VAE might've changed)
             with torch.no_grad():
                 if self.args.vae_mixture_num>1:
@@ -220,8 +247,6 @@ class MetaLearnerML10:
                 else:
                     latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory()
                     y=z=mu=var=logits=prob=None
-            print('0. encode_running_trajectory(): {}'.format(time.time()-prev_time))
-            prev_time = time.time()
 
             # add this initial hidden state to the policy storage
             assert len(self.policy_storage.latent_mean) == 0  # make sure we emptied buffers
@@ -234,8 +259,6 @@ class MetaLearnerML10:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                print("-" * 5, self.iter_idx, step, "-" * 5)
-
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -250,15 +273,56 @@ class MetaLearnerML10:
                         latent_mean=latent_mean,
                         latent_logvar=latent_logvar,
                     )
-                print('1. utl.select_action: {}'.format(time.time() - prev_time))
-                prev_time = time.time()
 
                 # take step in the environment
-                [next_state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(self.envs, action, self.args)
+                if virtual: #use virtual environment
+                    with torch.no_grad():
+                        if step == 0 and self.virtual_iter_idx%10 !=0 :
+                            next_state_pred = virtual_init_state.clone()
+                        else:
+                            next_state_pred = self.vae.state_decoder(latent_sample, prev_state, action)
 
-                print('2. utl.env_step: {}'.format(time.time() - prev_time))
-                prev_time = time.time()
+                        if step == self.args.policy_num_steps-1:
+                            next_state_pred[:, 39]=1.0
+                        else:
+                            next_state_pred[:, 39] = 0.0
 
+                        rew_raw_pred = self.vae.reward_decoder(latent_sample, next_state_pred, prev_state, action)
+
+                    info = {'done_mdp': False}
+                    done = np.array(self.args.num_processes * [False])
+                    if step == self.envs._max_episode_steps-1:
+                        info = {'done_mdp': True}
+                        if (self.virtual_iter_idx+1)%self.args.max_rollouts_per_task==0:
+                            done = np.array(self.args.num_processes*[True])
+                            info['bad_transition'] = True
+                    infos = tuple([info]*10)
+                    belief = None
+                    task = None
+
+                    next_state = next_state_pred.clone()
+                    rew_raw = rew_raw_pred.clone()
+                    rew_raw_np = rew_raw.cpu().numpy()
+
+                    #self.envs.venv.ret = self.envs.venv.ret * self.args.policy_gamma + rew_raw_np
+                    #self.envs.venv.ret[done] = 0.
+                    _, rew_normalised = self.envs.venv._rewfilt(rew_raw_np)
+                    rew_normalised = torch.from_numpy(rew_normalised)[:,0].unsqueeze(dim=1).float().to(device)
+
+                else: #use real environment
+                    [next_state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(self.envs, action, self.args)
+
+                #print('virtual: ', virtual)
+                print("=" * 10, self.iter_idx, self.virtual_iter_idx, step, "=" * 10, virtual)
+                #print("prev_state", prev_state[0])
+                #print("next_state", next_state[0])
+                #print("rew_raw", rew_raw)
+                #print("rew_normalised", rew_normalised)
+                #print("ret_rms var", self.envs.venv.ret_rms.var if self.args.norm_rew_for_policy else None)
+                #print("done", done)
+                #print("infos", infos[0])
+
+                ###################################
                 done = torch.from_numpy(np.array(done, dtype=int)).to(device).float().view((-1, 1))
                 # create mask for episode ends
                 masks_done = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done]).to(device)
@@ -268,6 +332,10 @@ class MetaLearnerML10:
                 with torch.no_grad():
                     # compute next embedding (for next loop and/or value prediction bootstrap)
                     if self.args.vae_mixture_num>1:
+                        if virtual:
+                            y_intercept_ = y_intercept
+                        else:
+                            y_intercept_ = None
                         latent_sample, latent_mean, latent_logvar, hidden_state, \
                         y, z, mu, var, logits, prob  = utl.update_encoding(
                             encoder=self.vae.encoder,
@@ -276,7 +344,8 @@ class MetaLearnerML10:
                             reward=rew_raw,
                             done=done,
                             hidden_state=hidden_state,
-                            vae_mixture_num=self.args.vae_mixture_num)
+                            vae_mixture_num=self.args.vae_mixture_num,
+                            y_intercept=y_intercept_)
                     else:
                         latent_sample, latent_mean, latent_logvar, hidden_state  = utl.update_encoding(
                             encoder=self.vae.encoder,
@@ -287,21 +356,16 @@ class MetaLearnerML10:
                             hidden_state=hidden_state,
                             vae_mixture_num=self.args.vae_mixture_num)
 
-                print('3. utl.update_encoding: {}'.format(time.time() - prev_time))
-                prev_time = time.time()
-
                 # before resetting, update the embedding and add to vae buffer
                 # (last state might include useful task info)
                 if not (self.args.disable_decoder and self.args.disable_kl_term):
-                    self.vae.rollout_storage.insert(prev_state.clone(),
-                                                    action.detach().clone(),
-                                                    next_state.clone(),
-                                                    rew_raw.clone(),
-                                                    done.clone(),
-                                                    task.clone() if task is not None else None)
-
-                print('4. vae.rollout_storage.insert: {}'.format(time.time() - prev_time))
-                prev_time = time.time()
+                    if not virtual: #do not insert virtual in the vae buffer? maybe we have to?
+                        self.vae.rollout_storage.insert(prev_state.clone(),
+                                                        action.detach().clone(),
+                                                        next_state.clone(),
+                                                        rew_raw.clone(),
+                                                        done.clone(),
+                                                        task.clone() if task is not None else None)
 
                 # add the obs before reset to the policy storage
                 self.policy_storage.next_state[step] = next_state.clone()
@@ -309,8 +373,13 @@ class MetaLearnerML10:
                 # reset environments that are done
                 done_indices = np.argwhere(done.cpu().flatten()).flatten()
                 if len(done_indices) > 0:
-                    next_state, belief, task = utl.reset_env(self.envs, self.args,
-                                                             indices=done_indices, state=next_state)
+                    #TODO1: for virtual envs, we need to store the initial states in a buffer
+                    next_state, belief, task = utl.reset_env(self.envs, self.args, indices=done_indices, state=next_state)
+                    resample_indices = np.argwhere(np.random.random(10)< self.args.resample_prob * self.recent_train_success[np.array(self.envs.get_task())[done_indices,0]]).flatten()
+                    next_state, belief, task = utl.reset_env(self.envs, self.args, indices=resample_indices, state=next_state)
+                    if virtual: #resample y with new distribution
+                        y_dist = self.generate_dirichlet(num_virtual_skills=self.args.num_virtual_skills, allow_smaller=False)
+                        y_intercept = y_dist.sample().to(device)
 
                 # TODO: deal with resampling for posterior sampling algorithm
                 #     latent_sample = latent_sample
@@ -341,9 +410,6 @@ class MetaLearnerML10:
                 )
                 prev_state = next_state
 
-                print('5. policy_storage.insert: {}'.format(time.time() - prev_time))
-                prev_time = time.time()
-
                 self.frames += self.args.num_processes
 
             # --- UPDATE ---
@@ -371,10 +437,13 @@ class MetaLearnerML10:
 
                     with torch.no_grad():
                         self.log(run_stats, train_stats, start_time)
-            print('6. self.update: {}'.format(time.time() - prev_time))
-            prev_time = time.time()
+
             # clean up after update
             self.policy_storage.after_update()
+
+            self.virtual_iter_idx+=1
+            if not virtual:
+                self.iter_idx +=1
 
         self.envs.close()
 
@@ -387,7 +456,6 @@ class MetaLearnerML10:
 
         # for each process, get the current batch (zero-padded obs/act/rew + length indicators)
         prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
-
         # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
         if self.args.vae_mixture_num>1:
             all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states,\
@@ -551,7 +619,7 @@ class MetaLearnerML10:
                 np.save('{}/{}/probs.npy'.format(self.logger.full_output_folder, self.iter_idx), probs_array)
                 if save_episode_probs:
                     np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx), episode_probs_array)
-
+            self.recent_train_success = taskwise_mean_success[:10]
         # --- save models ---
         if (self.iter_idx + 1) % self.args.save_interval == 0:
             save_path = os.path.join(self.logger.full_output_folder, 'models')

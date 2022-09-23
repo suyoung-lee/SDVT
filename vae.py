@@ -98,6 +98,7 @@ class VaribadVAE:
                 state_dim=self.args.state_dim,
                 state_embed_dim=self.args.state_embedding_size,
                 pred_type=self.args.state_pred_type,
+                dropout_rate=self.args.dropout_rate
             ).to(device)
         else:
             state_decoder = None
@@ -117,6 +118,7 @@ class VaribadVAE:
                 pred_type=self.args.rew_pred_type,
                 input_prev_state=self.args.input_prev_state,
                 input_action=self.args.input_action,
+                dropout_rate=self.args.dropout_rate
             ).to(device)
         else:
             reward_decoder = None

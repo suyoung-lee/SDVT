@@ -19,8 +19,8 @@ def moving_average(data, M=5):
     return data
 
 
-listdirs_ml10 = listdirs('logs/logs_ML10Env-v2')
-seed_list = range(10,18)
+listdirs_ml10 = listdirs('ml10-joint-log/oracle_vae10x_c5_d5_passprob_avgvae_adjustalpha/logs_ML10Env-v2/')
+seed_list = [10,11]
 dir_ml10=[]
 for seed in seed_list:
     for dir in listdirs_ml10:
@@ -34,7 +34,7 @@ for dir in dir_ml10:
     iter_list.append(len(df))
 min_iter = min(iter_list)
 print(min_iter)
-iter_list = range(min_iter)
+iter_list = [0, 10, 20, 30, 40]
 task_successes = np.zeros((len(iter_list), 15,len(seed_list))) #first 10 rows are train
 frame_list = []
 for seed in range(len(seed_list)):
@@ -60,12 +60,13 @@ for i in range(len(iter_list)):
     axes.append(fig.add_subplot((len(iter_list)+2)//3,3,i+1))
 
 for i in range(len(iter_list)):
+    title_text = 'at {:d}M steps, train: {:.1f}%, test: {:.1f}%'.format(int(frame_list[i] // 1e6),
+                                                                                 100*np.mean(data_mean[i][0:10]), 100*np.mean(data_mean[i][10:]))
     if i==0:
-        axes[i].set_title('VariBAD Success Rate at {:d}M steps ({:d} seeds)'.format(int(frame_list[i]//1e6),len(seed_list)))
-    else:
-        axes[i].set_title('at {:d}M steps'.format(int(frame_list[i] // 1e6)))
-    axes[i].bar(range(1,16), 100*data_mean[i], yerr=100*data_std[i], alpha=0.5, color = color_list)
-    axes[i].set_xticks(range(1,16))
+        title_text = "seed: {} ".format(seed_list[0]) + title_text
+    axes[i].set_title(title_text)
+    axes[i].bar(range(15), 100*data_mean[i], yerr=100*data_std[i], alpha=0.5, color = color_list)
+    axes[i].set_xticks(range(0,15))
     axes[i].set_ylim([0, 100])
     if i%3==0:
         axes[i].set_ylabel('Success Rate (%)')

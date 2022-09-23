@@ -100,6 +100,7 @@ class VaribadVAEMixture:
                 state_dim=self.args.state_dim,
                 state_embed_dim=self.args.state_embedding_size,
                 pred_type=self.args.state_pred_type,
+                dropout_rate = self.args.dropout_rate
             ).to(device)
         else:
             state_decoder = None
@@ -120,6 +121,7 @@ class VaribadVAEMixture:
                 pred_type=self.args.rew_pred_type,
                 input_prev_state=self.args.input_prev_state,
                 input_action=self.args.input_action,
+                dropout_rate=self.args.dropout_rate
             ).to(device)
         else:
             reward_decoder = None
@@ -314,6 +316,7 @@ class VaribadVAEMixture:
         num_decodes = vae_prev_obs.shape[0]
         batchsize = latent_samples.shape[1]  # number of trajectories
 
+
         # subsample elbo terms
         #   shape before: num_elbos * batchsize * dim
         #   shape after: vae_subsample_elbos * batchsize * dim
@@ -332,10 +335,19 @@ class VaribadVAEMixture:
                                   'so there will be duplicates in your batch.'
                                   'To avoid this use --split_batches_by_elbo or --split_batches_by_task.')
             task_indices = torch.arange(batchsize).repeat(self.args.vae_subsample_elbos)  # for selection mask
+
             latent_samples = latent_samples[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            y = y[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            z = z[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            mu = mu[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            var = var[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            logits = logits[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+            prob = prob[elbo_indices, task_indices, :].reshape((self.args.vae_subsample_elbos, batchsize, -1))
+
             num_elbos = latent_samples.shape[0]
         else:
             elbo_indices = None
+
 
         # expand the state/rew/action inputs to the decoder (to match size of latents)
         # shape will be: [num tasks in batch] x [num elbos] x [len trajectory (reconstrution loss)] x [dimension]
@@ -608,12 +620,12 @@ class VaribadVAEMixture:
             # update
             self.optimiser_vae.step()
 
-        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, pretrain_index)
+        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, pretrain_index)
 
 
         return elbo_loss
 
-    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, pretrain_index=None):
+    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, pretrain_index=None):
 
         if pretrain_index is None:
             curr_iter_idx = self.get_iter_idx()
@@ -629,4 +641,6 @@ class VaribadVAEMixture:
             if self.args.decode_task:
                 self.logger.add('vae_losses/task_reconstr_err', task_reconstruction_loss.mean(), curr_iter_idx)
 
+            self.logger.add('vae_losses/gauss_loss', gauss_loss.mean(), curr_iter_idx)
+            self.logger.add('vae_losses/cat_loss', cat_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/sum', elbo_loss, curr_iter_idx)
