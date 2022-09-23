@@ -17,7 +17,8 @@ class StateTransitionDecoder_mixture(nn.Module):
                  action_embed_dim,
                  state_dim,
                  state_embed_dim,
-                 pred_type='deterministic'
+                 pred_type='deterministic',
+                 dropout_rate=0.0
                  ):
         super(StateTransitionDecoder_mixture, self).__init__()
 
@@ -25,6 +26,9 @@ class StateTransitionDecoder_mixture(nn.Module):
 
         self.state_encoder = utl.FeatureExtractor(state_dim, state_embed_dim, F.relu)
         self.action_encoder = utl.FeatureExtractor(action_dim, action_embed_dim, F.relu)
+
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.drop_input = dropout_rate>0.0
 
         curr_input_dim = latent_dim + state_embed_dim + action_embed_dim
         self.fc_layers = nn.ModuleList([])
@@ -45,6 +49,9 @@ class StateTransitionDecoder_mixture(nn.Module):
 
         ha = self.action_encoder(actions)
         hs = self.state_encoder(state)
+        if self.drop_input:
+            ha = self.dropout(ha)
+            hs = self.dropout(hs)
         h = torch.cat((latent_state, hs, ha), dim=-1)
 
         for i in range(len(self.fc_layers)):
@@ -68,6 +75,7 @@ class RewardDecoder_mixture(nn.Module):
                  pred_type='deterministic',
                  input_prev_state=True,
                  input_action=True,
+                 dropout_rate= 0.0
                  ):
         super(RewardDecoder_mixture, self).__init__()
 
@@ -77,6 +85,8 @@ class RewardDecoder_mixture(nn.Module):
         self.multi_head = multi_head
         self.input_prev_state = input_prev_state
         self.input_action = input_action
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.drop_input = dropout_rate>0.0
 
         if self.multi_head:
             # one output head per state to predict rewards
@@ -126,12 +136,18 @@ class RewardDecoder_mixture(nn.Module):
             h = latent_state.clone()
         else:
             hns = self.state_encoder(next_state)
+            if self.drop_input:
+                hns = self.dropout(hns)
             h = torch.cat((latent_state, hns), dim=-1)
             if self.input_action:
                 ha = self.action_encoder(actions)
+                if self.drop_input:
+                    ha = self.dropout(ha)
                 h = torch.cat((h, ha), dim=-1)
             if self.input_prev_state:
                 hps = self.state_encoder(prev_state)
+                if self.drop_input:
+                    hps = self.dropout(hps)
                 h = torch.cat((h, hps), dim=-1)
 
         for i in range(len(self.fc_layers)):

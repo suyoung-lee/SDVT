@@ -68,11 +68,14 @@ class PPO:
 
         # if this is true, we will update the VAE at every PPO update
         # otherwise, we update it after we update the policy
+
+        # TODO this does not work for variBAD rllloss through encoder, need to figure out why,
+        '''
         if rlloss_through_encoder:
             # recompute embeddings (to build computation graph)
             utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=0,
                                      detach_every=self.args.tbptt_stepsize if hasattr(self.args,
-                                                                                      'tbptt_stepsize') else None)
+                                                                                      'tbptt_stepsize') else None)'''
 
         # update the normalisation parameters of policy inputs before updating
         self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
@@ -90,7 +93,7 @@ class PPO:
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
 
-                state_batch, belief_batch, task_batch, \
+                state_batch, belief_batch, task_batch, prob_batch, \
                 actions_batch, latent_sample_batch, latent_mean_batch, latent_logvar_batch, value_preds_batch, \
                 return_batch, old_action_log_probs_batch, adv_targ = sample
 
@@ -100,6 +103,8 @@ class PPO:
                         latent_sample_batch = latent_sample_batch.detach()
                         latent_mean_batch = latent_mean_batch.detach()
                         latent_logvar_batch = latent_logvar_batch.detach()
+                    if prob_batch is not None:
+                        prob_batch = prob_batch.detach()
 
                 latent_batch = utl.get_latent_for_policy(args=self.args, latent_sample=latent_sample_batch,
                                                          latent_mean=latent_mean_batch,
@@ -109,7 +114,7 @@ class PPO:
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy = \
                     self.actor_critic.evaluate_actions(state=state_batch, latent=latent_batch,
-                                                       belief=belief_batch, task=task_batch,
+                                                       belief=belief_batch, task=task_batch, prob=prob_batch,
                                                        action=actions_batch)
                 ratio = torch.exp(action_log_probs -
                                   old_action_log_probs_batch)
@@ -189,8 +194,8 @@ class PPO:
 
         return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, loss_epoch
 
-    def act(self, state, latent, belief, task, deterministic=False):
-        return self.actor_critic.act(state=state, latent=latent, belief=belief, task=task, deterministic=deterministic)
+    def act(self, state, latent, belief, task, prob, deterministic=False):
+        return self.actor_critic.act(state=state, latent=latent, belief=belief, task=task, prob=prob, deterministic=deterministic)
 
 
 
@@ -280,7 +285,7 @@ class PPO_DISC:
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
 
-                state_batch, belief_batch, task_batch, \
+                state_batch, belief_batch, task_batch, prob_batch, \
                 actions_batch, latent_sample_batch, latent_mean_batch, latent_logvar_batch, value_preds_batch, \
                 return_batch, old_action_log_probs_batch, old_action_log_probs_batch_dimwise, adv_targ = sample
 
@@ -290,6 +295,8 @@ class PPO_DISC:
                         latent_sample_batch = latent_sample_batch.detach()
                         latent_mean_batch = latent_mean_batch.detach()
                         latent_logvar_batch = latent_logvar_batch.detach()
+                    if prob_batch is not None:
+                        prob_batch = prob_batch.detach()
 
                 latent_batch = utl.get_latent_for_policy(args=self.args, latent_sample=latent_sample_batch,
                                                          latent_mean=latent_mean_batch,
@@ -299,7 +306,7 @@ class PPO_DISC:
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, action_log_probs_dimwise, dist_entropy = \
                     self.actor_critic.evaluate_actions(state=state_batch, latent=latent_batch,
-                                                       belief=belief_batch, task=task_batch,
+                                                       belief=belief_batch, task=task_batch, prob=prob_batch,
                                                        action=actions_batch)
 
 
@@ -415,5 +422,5 @@ class PPO_DISC:
 
         return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, loss_epoch
 
-    def act(self, state, latent, belief, task, deterministic=False):
-        return self.actor_critic.act(state=state, latent=latent, belief=belief, task=task, deterministic=deterministic)
+    def act(self, state, latent, belief, task, prob, deterministic=False):
+        return self.actor_critic.act(state=state, latent=latent, belief=belief, task=task,prob=prob, deterministic=deterministic)

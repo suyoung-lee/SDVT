@@ -56,7 +56,7 @@ def reset_env(env, args, indices=None, state=None):
 
     belief = torch.from_numpy(env.get_belief()).float().to(device) if args.pass_belief_to_policy else None
     task = torch.from_numpy(env.get_task()).float().to(device) if args.pass_task_to_policy else None
-        
+
     return state, belief, task
 
 
@@ -81,7 +81,8 @@ def env_step(env, action, args):
         reward = reward.to(device)
 
     belief = torch.from_numpy(env.get_belief()).float().to(device) if args.pass_belief_to_policy else None
-    task = torch.from_numpy(env.get_task()).float().to(device) if (args.pass_task_to_policy or args.decode_task) else None
+    task = torch.from_numpy(env.get_task()).float().to(device) if (
+                args.pass_task_to_policy or args.decode_task) else None
 
     return [next_obs, belief, task], reward, done, infos
 
@@ -92,11 +93,12 @@ def select_action(args,
                   state=None,
                   belief=None,
                   task=None,
+                  prob=None,
                   latent_sample=None, latent_mean=None, latent_logvar=None):
     """ Select action using the policy. """
     latent = get_latent_for_policy(args=args, latent_sample=latent_sample, latent_mean=latent_mean,
                                    latent_logvar=latent_logvar)
-    action = policy.act(state=state, latent=latent, belief=belief, task=task, deterministic=deterministic)
+    action = policy.act(state=state, latent=latent, belief=belief, task=task, prob=prob, deterministic=deterministic)
     if isinstance(action, list) or isinstance(action, tuple):
         value, action = action
     else:
@@ -106,7 +108,6 @@ def select_action(args,
 
 
 def get_latent_for_policy(args, latent_sample=None, latent_mean=None, latent_logvar=None):
-
     if (latent_sample is None) and (latent_mean is None) and (latent_logvar is None):
         return None
 
@@ -126,19 +127,21 @@ def get_latent_for_policy(args, latent_sample=None, latent_mean=None, latent_log
     return latent
 
 
-def update_encoding(encoder, next_obs, action, reward, done, hidden_state, vae_mixture_num=1):
+def update_encoding(encoder, next_obs, action, reward, done, hidden_state, vae_mixture_num=1, y_intercept=None):
+    # print("helpers.py, update_encoding called")
     # reset hidden state of the recurrent net when we reset the task
     if done is not None:
         hidden_state = encoder.reset_hidden(hidden_state, done)
 
-    if vae_mixture_num>1:
+    if vae_mixture_num > 1:
         with torch.no_grad():
-            latent_sample, latent_mean, latent_logvar, hidden_state,\
+            latent_sample, latent_mean, latent_logvar, hidden_state, \
             y, z, mu, var, logits, prob = encoder(actions=action.float(),
-                                                                              states=next_obs,
-                                                                              rewards=reward,
-                                                                              hidden_state=hidden_state,
-                                                                              return_prior=False)
+                                                  states=next_obs,
+                                                  rewards=reward,
+                                                  hidden_state=hidden_state,
+                                                  return_prior=False,
+                                                  y_intercept=y_intercept)
 
         # TODO: move the sampling out of the encoder!
 
@@ -184,12 +187,16 @@ def recompute_embeddings(
         encoder,
         sample,
         update_idx,
-        detach_every
+        detach_every,
+        mixture=False
 ):
     # get the prior
     latent_sample = [policy_storage.latent_samples[0].detach().clone()]
     latent_mean = [policy_storage.latent_mean[0].detach().clone()]
     latent_logvar = [policy_storage.latent_logvar[0].detach().clone()]
+    if mixture:
+        prob = [policy_storage.prob[0].detach().clone()]
+        prob[0].requires_grad = True
 
     latent_sample[0].requires_grad = True
     latent_mean[0].requires_grad = True
@@ -198,27 +205,46 @@ def recompute_embeddings(
     # loop through experience and update hidden state
     # (we need to loop because we sometimes need to reset the hidden state)
     h = policy_storage.hidden_states[0].detach()
-    for i in range(policy_storage.actions.shape[0]):
-        # reset hidden state of the GRU when we reset the task
-        h = encoder.reset_hidden(h, policy_storage.done[i + 1])
+    if mixture:
+        for i in range(policy_storage.actions.shape[0]):
+            # reset hidden state of the GRU when we reset the task
+            h = encoder.reset_hidden(h, policy_storage.done[i + 1])
 
-        ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
-                                policy_storage.next_state[i:i + 1],
-                                policy_storage.rewards_raw[i:i + 1],
-                                h,
-                                sample=sample,
-                                return_prior=False,
-                                detach_every=detach_every
-                                )
+            ts, tm, tl, h, ty, tz, tmu, tvar, tlogits, tprob = encoder(policy_storage.actions.float()[i:i + 1],
+                                                                       policy_storage.next_state[i:i + 1],
+                                                                       policy_storage.rewards_raw[i:i + 1],
+                                                                       h,
+                                                                       sample=sample,
+                                                                       return_prior=False,
+                                                                       detach_every=detach_every
+                                                                       )
+            # print("recompute embeddings, step: {}, latent_mean: {}".format(i, tm))
+            latent_sample.append(ts)
+            latent_mean.append(tm)
+            latent_logvar.append(tl)
+            prob.append(tprob)
+    else:
+        for i in range(policy_storage.actions.shape[0]):
+            # reset hidden state of the GRU when we reset the task
+            h = encoder.reset_hidden(h, policy_storage.done[i + 1])
 
-        # print(i, reset_task.sum())
-        # print(i, (policy_storage.latent_mean[i + 1] - tm).sum())
-        # print(i, (policy_storage.latent_logvar[i + 1] - tl).sum())
-        # print(i, (policy_storage.hidden_states[i + 1] - h).sum())
+            ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
+                                    policy_storage.next_state[i:i + 1],
+                                    policy_storage.rewards_raw[i:i + 1],
+                                    h,
+                                    sample=sample,
+                                    return_prior=False,
+                                    detach_every=detach_every
+                                    )
 
-        latent_sample.append(ts)
-        latent_mean.append(tm)
-        latent_logvar.append(tl)
+            # print(i, reset_task.sum())
+            # print(i, (policy_storage.latent_mean[i + 1] - tm).sum())
+            # print(i, (policy_storage.latent_logvar[i + 1] - tl).sum())
+            # print(i, (policy_storage.hidden_states[i + 1] - h).sum())
+
+            latent_sample.append(ts)
+            latent_mean.append(tm)
+            latent_logvar.append(tl)
 
     if update_idx == 0:
         try:
@@ -229,9 +255,14 @@ def recompute_embeddings(
             import pdb
             pdb.set_trace()
 
+    # print('3: ', policy_storage.latent_mean[1])
+    # print('4: ', latent_mean[1])
+
     policy_storage.latent_samples = latent_sample
     policy_storage.latent_mean = latent_mean
     policy_storage.latent_logvar = latent_logvar
+    if mixture:
+        policy_storage.prob = prob
 
 
 class FeatureExtractor(nn.Module):
@@ -302,6 +333,7 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
     m_a = var * count
     m_b = batch_var * batch_count
     M2 = m_a + m_b + torch.pow(delta, 2) * count * batch_count / tot_count
+    # print('update mean var count', M2, tot_count)
     new_var = M2 / tot_count
     new_count = tot_count
 

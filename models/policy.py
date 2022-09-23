@@ -36,6 +36,7 @@ class Policy(nn.Module):
                  pass_latent_to_policy,
                  pass_belief_to_policy,
                  pass_task_to_policy,
+                 pass_prob_to_policy,
                  dim_state,
                  dim_latent,
                  dim_belief,
@@ -74,8 +75,10 @@ class Policy(nn.Module):
 
         self.pass_state_to_policy = pass_state_to_policy
         self.pass_latent_to_policy = pass_latent_to_policy
+        self.pass_prob_to_policy = pass_prob_to_policy
         self.pass_task_to_policy = pass_task_to_policy
         self.pass_belief_to_policy = pass_belief_to_policy
+
 
         # set normalisation parameters for the inputs
         # (will be updated from outside using the RL batches)
@@ -91,9 +94,15 @@ class Policy(nn.Module):
         self.norm_task = self.args.norm_task_for_policy and (dim_task is not None)
         if self.pass_task_to_policy and self.norm_task:
             self.task_rms = utl.RunningMeanStd(shape=(dim_task))
+        dim_prob = self.args.vae_mixture_num
+        self.norm_prob = self.args.norm_prob_for_policy and (dim_prob is not None)
+        if self.pass_prob_to_policy and self.norm_prob:
+            self.prob_rms = utl.RunningMeanStd(shape=(dim_prob))
+
 
         curr_input_dim = dim_state * int(self.pass_state_to_policy) + \
                          dim_latent * int(self.pass_latent_to_policy) + \
+                         dim_prob * int(self.pass_prob_to_policy) + \
                          dim_belief * int(self.pass_belief_to_policy) + \
                          dim_task * int(self.pass_task_to_policy)
         # initialise encoders for separate inputs
@@ -105,6 +114,10 @@ class Policy(nn.Module):
         if self.pass_latent_to_policy and self.use_latent_encoder:
             self.latent_encoder = utl.FeatureExtractor(dim_latent, self.args.policy_latent_embedding_dim, self.activation_function)
             curr_input_dim = curr_input_dim - dim_latent + self.args.policy_latent_embedding_dim
+        self.use_prob_encoder = self.args.policy_prob_embedding_dim is not None
+        if self.pass_prob_to_policy and self.use_prob_encoder:
+            self.prob_encoder = utl.FeatureExtractor(dim_prob, self.args.policy_prob_embedding_dim, self.activation_function)
+            curr_input_dim = curr_input_dim - dim_prob + self.args.policy_prob_embedding_dim
         self.use_belief_encoder = self.args.policy_belief_embedding_dim is not None
         if self.pass_belief_to_policy and self.use_belief_encoder:
             self.belief_encoder = utl.FeatureExtractor(dim_belief, self.args.policy_belief_embedding_dim, self.activation_function)
@@ -156,7 +169,7 @@ class Policy(nn.Module):
             h = self.activation_function(h)
         return h
 
-    def forward(self, state, latent, belief, task):
+    def forward(self, state, latent, belief, task, prob):
 
         # handle inputs (normalise + embed)
 
@@ -193,9 +206,15 @@ class Policy(nn.Module):
                 task = self.task_encoder(task.float())
         else:
             task = torch.zeros(0, ).to(device)
-
+        if self.pass_prob_to_policy:
+            if self.norm_prob:
+                prob = (prob - self.prob_rms.mean) / torch.sqrt(self.prob_rms.var + 1e-8)
+            if self.use_prob_encoder:
+                prob = self.prob_encoder(prob)
+        else:
+            prob = torch.zeros(0, ).to(device)
         # concatenate inputs
-        inputs = torch.cat((state, latent, belief, task), dim=-1)
+        inputs = torch.cat((state, latent, belief, task, prob), dim=-1)
 
 
         # forward through critic/actor part
@@ -203,11 +222,11 @@ class Policy(nn.Module):
         hidden_actor = self.forward_actor(inputs)
         return self.critic_linear(hidden_critic), hidden_actor
 
-    def act(self, state, latent, belief, task, deterministic=False):
+    def act(self, state, latent, belief, task, prob=None, deterministic=False):
         """
         Returns the (raw) actions and their value.
         """
-        value, actor_features = self.forward(state=state, latent=latent, belief=belief, task=task)
+        value, actor_features = self.forward(state=state, latent=latent, belief=belief, task=task, prob=prob)
         dist = self.dist(actor_features)
         if deterministic:
             if isinstance(dist, FixedCategorical):
@@ -219,8 +238,8 @@ class Policy(nn.Module):
 
         return value, action
 
-    def get_value(self, state, latent, belief, task):
-        value, _ = self.forward(state, latent, belief, task)
+    def get_value(self, state, latent, belief, task, prob):
+        value, _ = self.forward(state, latent, belief, task, prob)
         return value
 
     def update_rms(self, args, policy_storage):
@@ -239,9 +258,9 @@ class Policy(nn.Module):
         if self.pass_task_to_policy and self.norm_task:
             self.task_rms.update(policy_storage.tasks[:-1])
 
-    def evaluate_actions(self, state, latent, belief, task, action):
+    def evaluate_actions(self, state, latent, belief, task, prob, action):
 
-        value, actor_features = self.forward(state, latent, belief, task)
+        value, actor_features = self.forward(state, latent, belief, task, prob)
         dist = self.dist(actor_features)
         if self.args.norm_actions_post_sampling:
             transformation = TanhTransform(cache_size=1)

@@ -183,7 +183,7 @@ class RNNEncoder_mixture(nn.Module):
             h = F.relu(self.fc_after_gru[i](h))
 
         h_reshaped = torch.reshape(h, (-1,h.size(2))) #procsx256 or (5000batchsize)x256
-        logits, prob, y = self.qyx(h_reshaped, temperature = 1.0, hard = 0) #10xclass or (5000batchsize)xclass
+        logits, prob, y = self.qyx(h_reshaped, temperature = self.args.gumbel_temperature, hard = 0) #10xclass or (5000batchsize)xclass
         mu, var, z = self.qzxy(h_reshaped, y) #procsx5 or (5000batchsize)xlatent_dim
 
         #return latent_sample, latent_mean, latent_logvar, hidden_state
@@ -209,7 +209,7 @@ class RNNEncoder_mixture(nn.Module):
             concat = layer(concat)
         return concat
 
-    def forward(self, actions, states, rewards, hidden_state, return_prior, sample=True, detach_every=None):
+    def forward(self, actions, states, rewards, hidden_state, return_prior, sample=True, detach_every=None, y_intercept=None):
         """
         Actions, states, rewards should be given in form [sequence_len * batch_size * dim].
         For one-step predictions, sequence_len=1 and hidden_state!=None.
@@ -272,7 +272,9 @@ class RNNEncoder_mixture(nn.Module):
         #logits, prob, y = self.qyx(gru_h_reshaped, temperature = 1.0, hard = 0) #10xclass or (5000batchsize)xclass
 
         logits, prob, y = self.qyx(gru_h_reshaped, temperature = self.args.gumbel_temperature, hard = 0) #10xclass or (5000batchsize)xclass
-        #print(gru_h.size(),logits.size(),prob.size(),y.size())
+        if y_intercept is not None: # ignore the previous steps and just cut through graph
+            y = y_intercept
+            #print('y_intercept at encoder:', y_intercept)
         # q(z|x,y)
         mu, var, z = self.qzxy(gru_h_reshaped, y) #procsx5 or (5000batchsize)xlatent_dim
 
@@ -301,4 +303,4 @@ class RNNEncoder_mixture(nn.Module):
 
         # procs x latent_dim, 5001 x batchsize x latent_dim
         #return latent_sample, latent_mean, latent_logvar, output, y, z, mu, var, logits, prob
-        return z, mu, torch.log(var+ 1e-8), output, y, z, mu, var, logits, prob
+        return z, mu, torch.log(var+ 1e-20), output, y, z, mu, var, logits, prob
