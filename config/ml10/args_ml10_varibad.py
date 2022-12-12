@@ -52,15 +52,15 @@ def get_args(rest_args):
     parser.add_argument('--policy_optimiser', type=str, default='adam', help='choose: rmsprop, adam')
 
     # PPO specifi
-    parser.add_argument('--ppo_num_epochs', type=int, default=10, help='number of epochs per PPO update') #v11.2 221203 2->10
+    parser.add_argument('--ppo_num_epochs', type=int, default=2, help='number of epochs per PPO update') #v11.2 221203 2->10
     parser.add_argument('--ppo_num_minibatch', type=int, default=25, help='number of minibatches to split the data') #v11.2 221203 1-->1562
     parser.add_argument('--ppo_use_huberloss', type=boolean_argument, default=True, help='use huberloss instead of MSE')
     parser.add_argument('--ppo_use_clipped_value_loss', type=boolean_argument, default=True, help='clip value loss')
-    parser.add_argument('--ppo_clip_param', type=float, default=0.2, help='clamp param') #v11: 0.1->0.2
+    parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param') #v11: 0.1->0.2
     parser.add_argument('--ppo_disc',  type=boolean_argument, default=False, help='dimension-wise clipping')
 
     # other hyperparameters
-    parser.add_argument('--lr_policy', type=float, default=5e-4, help='learning rate (default: 7e-4)') #v11: 7e-4->5e-4
+    parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)') #v11: 7e-4->5e-4
     parser.add_argument('--num_processes', type=int, default=10,
                         help='how many training CPU processes / parallel environments to use (default: 16)')
     parser.add_argument('--policy_num_steps', type=int, default=5000, #v11 part2: 500->5000
@@ -74,7 +74,7 @@ def get_args(rest_args):
     parser.add_argument('--policy_gamma', type=float, default=0.99, help='discount factor for rewards')
     parser.add_argument('--policy_use_gae', type=boolean_argument, default=True,
                         help='use generalized advantage estimation')
-    parser.add_argument('--policy_tau', type=float, default=0.95, help='gae parameter') #v11: 0.9-> 0.95
+    parser.add_argument('--policy_tau', type=float, default=0.90, help='gae parameter') #v11: 0.9-> 0.95
     parser.add_argument('--use_proper_time_limits', type=boolean_argument, default=True,
                         help='treat timeout and death differently (important in mujoco)')
     parser.add_argument('--policy_max_grad_norm', type=float, default=0.5, help='max norm of gradients')
