@@ -35,6 +35,8 @@ class MetaLearnerML10Post:
     def __init__(self, args):
 
         self.args = args
+        if self.args.vae_mixture_num<2:
+            self.args.pass_prob_to_policy = False
         self.total_period = self.args.post_period * self.args.max_rollouts_per_task
         utl.seed(self.args.seed, self.args.deterministic_execution)
 

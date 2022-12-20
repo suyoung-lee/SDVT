@@ -35,6 +35,8 @@ class MetaLearnerML10Post2:
     def __init__(self, args):
 
         self.args = args
+        if self.args.vae_mixture_num<2:
+            self.args.pass_prob_to_policy = False
         self.total_period = self.args.post_period * self.args.max_rollouts_per_task
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
@@ -249,11 +251,6 @@ class MetaLearnerML10Post2:
         y_sample = y_sample.to(device)
         return y_sample
 
-    def sample_z(self, num_procs, latent_dim):
-        z_sample = torch.zeros(num_procs, latent_dim)
-
-        return 0
-
     def train(self):
         """ Main Meta-Training loop """
         start_time = time.time()
@@ -262,8 +259,7 @@ class MetaLearnerML10Post2:
         prev_state, belief, task = utl.reset_env(self.envs, self.args)
         if self.args.vae_mixture_num > 1:
             y_intercept = self.sample_y(num_procs=self.args.num_processes, num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist=self.args.virtual_dist)
-        else:
-            z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim)
+
         #resample_action = self.policy_resample.select_action(y_intercept.clone()).cpu().numpy().flatten()
         #resample_indices = np.argwhere(resample_action == 1.0).flatten()
         #if len(resample_indices) > 0:
