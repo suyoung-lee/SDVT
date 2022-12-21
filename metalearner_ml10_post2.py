@@ -228,9 +228,9 @@ class MetaLearnerML10Post2:
         return policy
 
 
-    def sample_y(self, num_procs, num_virtual_skills, include_smaller = False, dist = 'dir'):
+    def sample_y(self, num_procs, num_virtual_skills, include_smaller = False, dist = 'dir', past_y = None):
         y_sample = torch.zeros(num_procs, self.args.vae_mixture_num)
-        if dist == 'dir':
+        if dist == 'dir' or past_y is None:
             for i in range(num_procs):
                 if include_smaller:
                     index = random.sample(range(self.args.vae_mixture_num), random.choice(range(1, num_virtual_skills + 1)))
@@ -247,6 +247,17 @@ class MetaLearnerML10Post2:
                 else:
                     index = random.sample(range(self.args.vae_mixture_num), num_virtual_skills)
                 y_sample[i,index]=1.0/len(index)
+        elif dist == 'dir-interpolate':
+            for i in range(num_procs):
+                if include_smaller:
+                    index = random.sample(range(num_procs), random.choice(range(1, num_virtual_skills + 1)))
+                else:
+                    index = random.sample(range(num_procs), num_virtual_skills)
+                alpha = torch.zeros(num_procs)
+                alpha[index]=1.0
+                y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
+
+                y_sample[i,:] = y_dist.sample() * past_y
 
         y_sample = y_sample.to(device)
         return y_sample
@@ -420,7 +431,7 @@ class MetaLearnerML10Post2:
                         #self.return_list = torch.zeros((self.args.num_processes)).to(device)
                         #policy_resample_loss = self.policy_resample.update(ret_rms=self.envs.venv.ret_rms)
 
-                        y_intercept = self.sample_y(num_procs = self.args.num_processes, num_virtual_skills = self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist = self.args.virtual_dist)
+                        y_intercept = self.sample_y(num_procs = self.args.num_processes, num_virtual_skills = self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist = self.args.virtual_dist, past_y = y)
                         #resample_action = self.policy_resample.select_action(y_intercept.clone()).cpu().numpy().flatten()
                         #resample_indices = np.argwhere(resample_action == 1.0).flatten()
                         #if len(resample_indices)>0:
