@@ -37,7 +37,8 @@ class MetaLearnerML10Post:
         self.args = args
         if self.args.vae_mixture_num<2:
             self.args.pass_prob_to_policy = False
-        self.total_period = self.args.post_period * self.args.max_rollouts_per_task
+        self.virtual_ratio = self.args.virtual_ratio
+        #self.total_period = self.args.post_period * self.args.max_rollouts_per_task
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
         # calculate number of updates and keep count of frames/iterations
@@ -269,10 +270,9 @@ class MetaLearnerML10Post:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            if self.virtual_iter_idx%self.total_period in range(self.args.max_rollouts_per_task):
+            if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
                 virtual = True
-                if self.virtual_iter_idx%self.args.max_rollouts_per_task==0:
-                    virtual_init_state = prev_state.clone() #Reuse this state for every initial -->TODO1: sample from buffer
+                virtual_init_state = prev_state.clone() #Reuse this state for every initial -->TODO1: sample from buffer
             else:
                 virtual = False
             # First, re-compute the hidden states given the current rollouts (since the VAE might've changed)

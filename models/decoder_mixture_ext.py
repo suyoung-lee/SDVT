@@ -104,7 +104,7 @@ class RewardDecoder_mixture_ext(nn.Module):
                 self.action_encoder = utl.FeatureExtractor(action_dim, action_embed_dim, F.relu)
             else:
                 self.action_encoder = None
-            curr_input_dim = self.args.encoder_gru_hidden_size + state_embed_dim
+            curr_input_dim = self.args.encoder_gru_hidden_size + state_embed_dim #because of the dispersion structure
             if input_prev_state:
                 curr_input_dim += state_embed_dim
             if input_action:

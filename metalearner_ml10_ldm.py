@@ -28,7 +28,7 @@ torch.autograd.set_detect_anomaly(True)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class MetaLearnerML10Post2:
+class MetaLearnerML10LDM:
     """
     Meta-Learner class with the main training loop for variBAD.
     """
@@ -219,12 +219,22 @@ class MetaLearnerML10Post2:
 
         return policy
 
-    def sample_z(self, num_procs, latent_dim, previous_latent_sample):
+    def sample_z(self, num_procs, latent_dim, past_z):
         with torch.no_grad():
-            if previous_latent_sample == None:
-                z_intercept = torch.zeros(num_procs, latent_dim)
+            z_sample = torch.zeros(num_procs, latent_dim)
+            if past_z == None:
+                z_intercept = torch.zeros(num_procs, latent_dim).to(device)
             else:
-                z_intercept = previous_latent_sample.clone()
+                for i in range(num_procs):
+                    if include_smaller:
+                        index = random.sample(range(num_procs), random.choice(range(1, num_virtual_skills + 1)))
+                    else:
+                        index = random.sample(range(num_procs), num_virtual_skills)
+                    alpha = 1e-20 * torch.ones(num_procs)
+                    alpha[index] = 1.0
+                    z_dist = torch.distributions.dirichlet.Dirichlet(alpha)
+                    z_sample[i, :] = torch.matmul(z_dist.sample(), past_z)
+                z_intercept = past_z.clone()
         return z_intercept
 
     def train(self):
@@ -233,7 +243,7 @@ class MetaLearnerML10Post2:
 
         # reset environments
         prev_state, belief, task = utl.reset_env(self.envs, self.args)
-        z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, previous_latent_sample = None)
+        z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, past_z = None)
         # insert initial observation / embeddings to rollout storage
         self.policy_storage.prev_state[0].copy_(prev_state)
 
@@ -243,7 +253,7 @@ class MetaLearnerML10Post2:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            if self.virtual_iter_idx%self.total_period in range(self.args.max_rollouts_per_task):
+            if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
                 virtual = True
             else:
                 virtual = False
@@ -337,7 +347,7 @@ class MetaLearnerML10Post2:
                     next_state, belief, task = utl.reset_env(self.envs, self.args, indices=done_indices, state=next_state)
 
                     if virtual: #resample y with new distribution
-                        z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, previous_latent_sample = latent_sample)
+                        z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, past_z = latent_sample.cpu())
 
 
                 # TODO: deal with resampling for posterior sampling algorithm
@@ -398,6 +408,7 @@ class MetaLearnerML10Post2:
 
             self.virtual_iter_idx+=1
             self.iter_idx +=1
+            self.virtual_ratio += self.args.virtual_ratio_increment*(self.args.num_processes*self.args.policy_num_steps)/1e8
 
         self.envs.close()
 

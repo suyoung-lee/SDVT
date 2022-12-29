@@ -1,4 +1,4 @@
-#218 v11
+#227 v11
 import os
 import time
 
@@ -37,7 +37,7 @@ class MetaLearnerML10Post2:
         self.args = args
         if self.args.vae_mixture_num<2:
             self.args.pass_prob_to_policy = False
-        self.total_period = self.args.post_period * self.args.max_rollouts_per_task
+        self.virtual_ratio = self.args.virtual_ratio
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
         # calculate number of updates and keep count of frames/iterations
@@ -236,7 +236,7 @@ class MetaLearnerML10Post2:
                     index = random.sample(range(self.args.vae_mixture_num), random.choice(range(1, num_virtual_skills + 1)))
                 else:
                     index = random.sample(range(self.args.vae_mixture_num), num_virtual_skills)
-                alpha = torch.zeros(self.args.vae_mixture_num)
+                alpha = 1e-20 * torch.ones(self.args.vae_mixture_num)
                 alpha[index]=1.0
                 y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
                 y_sample[i,:] = y_dist.sample()
@@ -253,11 +253,10 @@ class MetaLearnerML10Post2:
                     index = random.sample(range(num_procs), random.choice(range(1, num_virtual_skills + 1)))
                 else:
                     index = random.sample(range(num_procs), num_virtual_skills)
-                alpha = torch.zeros(num_procs)
+                alpha = 1e-20 * torch.ones(num_procs)
                 alpha[index]=1.0
                 y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
-
-                y_sample[i,:] = y_dist.sample() * past_y
+                y_sample[i,:] = torch.matmul(y_dist.sample(),past_y)
 
         y_sample = y_sample.to(device)
         return y_sample
@@ -284,7 +283,7 @@ class MetaLearnerML10Post2:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            if self.virtual_iter_idx%self.total_period in range(self.args.max_rollouts_per_task):
+            if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
                 virtual = True
             else:
                 virtual = False
@@ -293,8 +292,7 @@ class MetaLearnerML10Post2:
                 if self.args.vae_mixture_num>1:
                     latent_sample, latent_mean, latent_logvar, hidden_state, \
                     y, z, mu, var, logits, prob = self.encode_running_trajectory(virtual)
-                    if self.iter_idx%10==0:
-                        latent_sample_v = latent_sample.clone().detach() #strictly this is not correct, since the VAE is changing during virtual meta-epi as well
+                    latent_sample_v = latent_sample.clone().detach() #strictly this is not correct, since the VAE is changing during virtual meta-epi as well,ok beacuase metaepisode ends every iter
                 else:
                     latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory(virtual)
                     y=z=mu=var=logits=prob=None
@@ -310,7 +308,7 @@ class MetaLearnerML10Post2:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step)
+                #print(self.iter_idx, step, virtual)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -426,18 +424,8 @@ class MetaLearnerML10Post2:
                     #TODO1: for virtual envs, we need to store the initial states in a buffer
                     next_state, belief, task = utl.reset_env(self.envs, self.args, indices=done_indices, state=next_state)
 
-                    if virtual: #resample y with new distribution
-                        #self.policy_resample.append_return_list(self.return_list)
-                        #self.return_list = torch.zeros((self.args.num_processes)).to(device)
-                        #policy_resample_loss = self.policy_resample.update(ret_rms=self.envs.venv.ret_rms)
-
-                        y_intercept = self.sample_y(num_procs = self.args.num_processes, num_virtual_skills = self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist = self.args.virtual_dist, past_y = y)
-                        #resample_action = self.policy_resample.select_action(y_intercept.clone()).cpu().numpy().flatten()
-                        #resample_indices = np.argwhere(resample_action == 1.0).flatten()
-                        #if len(resample_indices)>0:
-                        #    y_intercept[resample_indices,:] = self.sample_y(num_procs = len(resample_indices), num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist = self.args.virtual_dist)
-
-
+                    if virtual != (self.args.virtual_dist=='dir-interpolate'): #resample y with new distribution
+                        y_intercept = self.sample_y(num_procs = self.args.num_processes, num_virtual_skills = self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist = self.args.virtual_dist, past_y = y.cpu())
                 # TODO: deal with resampling for posterior sampling algorithm
                 #     latent_sample = latent_sample
                 #     latent_sample[i] = latent_sample[i]
@@ -500,7 +488,7 @@ class MetaLearnerML10Post2:
 
             self.virtual_iter_idx+=1
             self.iter_idx +=1
-
+            self.virtual_ratio += self.args.virtual_ratio_increment*(self.args.num_processes*self.args.policy_num_steps)/1e8
         self.envs.close()
 
     def encode_running_trajectory(self, virtual = False):

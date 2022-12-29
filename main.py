@@ -1,4 +1,4 @@
-#218 v11
+#42 v11
 """
 Main scripts to start experiments.
 Takes a flag --env-type (see below for choices) and loads the parameters from the respective config file.
@@ -33,6 +33,7 @@ from metalearner_ml10 import MetaLearnerML10
 from metaeval_ml10 import MetaEvalML10
 from metalearner_ml10_post import MetaLearnerML10Post
 from metalearner_ml10_post2 import MetaLearnerML10Post2
+from metalearner_ml10_ldm import MetaLearnerML10LDM
 
 def main():
     parser = argparse.ArgumentParser()
@@ -131,7 +132,7 @@ def main():
         args = args_humanoid_dir_rl2.get_args(rest_args)
 
     # ml10
-    elif env in ['ml10', 'ml10-post', 'ml10-post2']:
+    elif env in ['ml10', 'ml10-post', 'ml10-post2', 'ml10-ldm']:
         if args.load_dir is None:
             args = args_ml10_varibad.get_args(rest_args)
             args.load_dir = None
@@ -204,11 +205,14 @@ def main():
         elif env == 'ml10-eval':
             learner = MetaEvalML10(args)
         elif env == 'ml10-post':
-            args.results_log_dir = args.results_log_dir + '_post'
+            args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10Post(args)
         elif env == 'ml10-post2':
-            args.results_log_dir = args.results_log_dir + '_post2'
+            args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10Post2(args)
+        elif env == 'ml10-ldm':
+            args.results_log_dir = args.results_log_dir
+            learner = MetaLearnerML10LDM(args)
         elif args.disable_metalearner:
             # If `disable_metalearner` is true, the file `learner.py` will be used instead of `metalearner.py`.
             # This is a stripped down version without encoder, decoder, stochastic latent variables, etc.

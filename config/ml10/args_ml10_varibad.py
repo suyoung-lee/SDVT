@@ -215,7 +215,8 @@ def get_args(rest_args):
 
 
     # --- Virtual ---
-    parser.add_argument('--post_period', type=int, default=10)
+    parser.add_argument('--virtual_ratio', type=float, default=0.0, help='virtual training ratio')
+    parser.add_argument('--virtual_ratio_increment', type=float, default=0.0, help='virtual ratio increased per 100M steps')
     parser.add_argument('--num_virtual_skills', type=int, default=5)
     parser.add_argument('--include_smaller', type=boolean_argument, default=True,
                         help='allow smaller number of virtual skills')
