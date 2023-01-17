@@ -1,4 +1,4 @@
-#227 v11
+#218 v11
 import os
 import time
 
@@ -42,12 +42,15 @@ class MetaLearnerML10Post2:
 
         # calculate number of updates and keep count of frames/iterations
         self.num_updates = int(args.num_frames) // args.policy_num_steps // args.num_processes
+
         if self.args.load_dir is None:
             self.frames = 0
             self.iter_idx = -1
         else:
             self.frames = (int(self.args.load_iter)+1) * self.args.policy_num_steps * self.args.num_processes
+            self.args.precollect_len = self.args.precollect_len + self.frames
             self.iter_idx = int(self.args.load_iter)
+
         self.recent_train_success = np.zeros(10)
         self.task_count = np.zeros((self.args.num_processes))
         #self.return_list = torch.zeros((self.args.num_processes)).to(device)
@@ -108,19 +111,26 @@ class MetaLearnerML10Post2:
 
         if self.args.load_dir is not None:
             print('loading pretrained model from ', self.args.load_dir)
-            self.policy.actor_critic = torch.load(self.args.load_dir+'/models/policy{}.pt'.format(self.args.load_iter))
+            #self.policy.actor_critic = torch.load(self.args.load_dir+'/models/policy{}.pt'.format(self.args.load_iter))
+            self.policy.actor_critic.load_state_dict(torch.load(self.args.load_dir+'/models/policy{}.pt'.format(self.args.load_iter)).state_dict())
             self.policy.actor_critic.train()
-            self.vae.encoder = torch.load(self.args.load_dir+'/models/encoder{}.pt'.format(self.args.load_iter))
+            print('policy loaded')
+
+            self.vae.encoder.load_state_dict(torch.load(self.args.load_dir+'/models/encoder{}.pt'.format(self.args.load_iter)).state_dict())
             self.vae.encoder.train()
+            print('vae.encoder loaded')
             if self.vae.state_decoder is not None:
-                self.vae.state_decoder = torch.load(self.args.load_dir+'/models/state_decoder{}.pt'.format(self.args.load_iter))
+                self.vae.state_decoder.load_state_dict(torch.load(self.args.load_dir+'/models/state_decoder{}.pt'.format(self.args.load_iter)).state_dict())
                 self.vae.state_decoder.train()
+                print('vae.state_decoder loaded')
             if self.vae.reward_decoder is not None:
-                self.vae.reward_decoder = torch.load(self.args.load_dir+'/models/reward_decoder{}.pt'.format(self.args.load_iter))
+                self.vae.reward_decoder.load_state_dict(torch.load(self.args.load_dir+'/models/reward_decoder{}.pt'.format(self.args.load_iter)).state_dict())
                 self.vae.reward_decoder.train()
+                print('vae.reward_decoder loaded')
             if self.vae.task_decoder is not None:
-                self.vae.task_decoder = torch.load(self.args.load_dir+'/models/task_decoder{}.pt'.format(self.args.load_iter))
+                self.vae.task_decoder.load_state_dict(torch.load(self.args.load_dir+'/models/task_decoder{}.pt'.format(self.args.load_iter)).state_dict())
                 self.vae.task_decoder.train()
+                print('vae.task_decoder loaded')
             self.vae.optimiser_vae.load_state_dict(torch.load(self.args.load_dir+'/models/optimiser_vae{}.pt'.format(self.args.load_iter)))
             self.policy.optimiser.load_state_dict(torch.load(self.args.load_dir+'/models/optimiser_pol{}.pt'.format(self.args.load_iter)))
 
@@ -454,9 +464,7 @@ class MetaLearnerML10Post2:
                     prob=prob,
                 )
                 prev_state = next_state
-
                 self.frames += self.args.num_processes
-
             # --- UPDATE ---
 
             if self.args.precollect_len <= self.frames:
@@ -468,7 +476,6 @@ class MetaLearnerML10Post2:
                                                   pretrain_index=self.iter_idx * self.args.num_vae_updates_per_pretrain + p)
                 # otherwise do the normal update (policy + vae)
                 else:
-
                     train_stats = self.update(state=prev_state,
                                               belief=belief,
                                               task=task,
@@ -722,8 +729,8 @@ class MetaLearnerML10Post2:
 
         # --- log some other things ---
 
-        #if 0:
-        #if train_stats is not None and self.iter_idx>1:
+        #if 1:
+        #if train_stats is not None and self.iter_idx>0:
         if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)
@@ -762,6 +769,7 @@ class MetaLearnerML10Post2:
                     #print('model', model)
                     #for i in range(len(param_list)):
                     #    print('param_list grad ',i, param_list[i].grad is None , param_list[i].size())
+                    #    print(param_list[i].data.mean())
 
                     self.logger.add('weights/{}'.format(name), param_mean, self.iter_idx)
                     if name == 'policy':
