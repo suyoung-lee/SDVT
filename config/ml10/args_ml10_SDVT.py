@@ -197,7 +197,7 @@ def get_args(rest_args):
 
     # --- OTHERS ---
 
-    # logging, saving, evaluation #v11 part2 all 1/10 times 221203
+    # logging, saving, evaluation
     parser.add_argument('--log_interval', type=int, default=50, help='log interval, one log per n updates')
     parser.add_argument('--save_interval', type=int, default=200, help='save interval, one save per n updates')
     parser.add_argument('--save_intermediate_models', type=boolean_argument, default=True, help='save all models')

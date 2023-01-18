@@ -1,4 +1,3 @@
-#219 v11
 """
 Based on https://github.com/ikostrikov/pytorch-a2c-ppo-acktr
 """

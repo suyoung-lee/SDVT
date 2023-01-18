@@ -1,4 +1,3 @@
-#218 v11
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -71,12 +70,6 @@ class PPO:
         # otherwise, we update it after we update the policy
 
         # TODO this does not work for variBAD rllloss through encoder, need to figure out why,
-        '''
-        if rlloss_through_encoder:
-            # recompute embeddings (to build computation graph)
-            utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=0,
-                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args,
-                                                                                      'tbptt_stepsize') else None)'''
 
         # update the normalisation parameters of policy inputs before updating
         self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
@@ -198,9 +191,6 @@ class PPO:
     def act(self, state, latent, belief, task, prob, deterministic=False):
         return self.actor_critic.act(state=state, latent=latent, belief=belief, task=task, prob=prob, deterministic=deterministic)
 
-
-
-
 class PPO_DISC:
     def __init__(self,
                  args,
@@ -320,15 +310,6 @@ class PPO_DISC:
                 log_rho = action_log_probs - old_action_log_probs_batch #5000,1 use joint
                 L_IS = 0.5 * log_rho.pow(2).mean()
                 L_DISC = action_loss + self.alpha_IS * L_IS
-                '''
-                print('epoch', e)
-                print('action_loss', action_loss)
-                print('log_rho', log_rho)
-                print('action_log_probs', action_log_probs)
-                print('old_action_log_probs_batch', old_action_log_probs_batch)
-                print('L_IS', L_IS)
-                print('L_DISC', L_DISC)
-                print('alpha_IS', self.alpha_IS)'''
 
                 #adjust alpha_IS for next iter
                 if e!=0: #to be precise it should be updated after all epoch is over. when epoch is not 2
@@ -337,19 +318,6 @@ class PPO_DISC:
                     elif L_IS > self.L_targ*1.5:
                         self.alpha_IS *= 2
                     self.alpha_IS = np.clip(self.alpha_IS, 2 ** (-10), 64)
-
-                '''
-                print('ratio_dimwise', ratio_dimwise, ratio_dimwise.size())
-                print('adv_targ', adv_targ, adv_targ.size())
-                print('adv_targ_sign', adv_targ_sign, adv_targ_sign.size())
-                print('unclipped', unclipped, unclipped.size())
-                print('clipped', clipped, clipped.size())
-                print('action_loss_dimwise',action_loss_dimwise, action_loss.size())'''
-
-                #ratio = torch.exp(action_log_probs - old_action_log_probs_batch)  # 5000,1
-                #surr1 = ratio * adv_targ
-                #surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv_targ
-                #action_loss = -torch.min(surr1, surr2).mean()
 
                 if self.use_huber_loss and self.use_clipped_value_loss:
                     value_pred_clipped = value_preds_batch + (values - value_preds_batch).clamp(-self.clip_param,

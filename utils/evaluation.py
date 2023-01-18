@@ -121,7 +121,7 @@ def evaluate_ml10(args,
              tasks,
              encoder=None,
              num_episodes=None,
-             test = False, task_list = None, save_episode_probs=False, save_episode_successes=False, tag_virtual=False):
+             test = False, task_list = None, save_episode_probs=False, save_episode_successes=False):
     env_name = args.env_name
     if test:
         env_name = args.test_env_name
@@ -157,8 +157,6 @@ def evaluate_ml10(args,
     envs.reset_task(task_list)
     state2= torch.from_numpy(envs._get_obs()).float().to(device)
     state[:,:39] = state2.clone()
-    #if tag_virtual:
-    #    state[:,38]=1.0
 
     # this counts how often an agent has done the same task already
     task_count = torch.zeros(num_processes).long().to(device)
@@ -196,8 +194,6 @@ def evaluate_ml10(args,
                                                                                     task_list[i, 1]), exist_ok=True)
             imgs_array = []
         for step_idx in range(num_steps):
-            #print(episode_idx, step_idx, state[0])
-
             with torch.no_grad():
                 _, action = utl.select_action(args=args,
                                               policy=policy,
@@ -214,8 +210,6 @@ def evaluate_ml10(args,
 
             # observe reward and next obs
             [state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(envs, action, args)
-            #if tag_virtual:
-            #    state[:, 38] = 1.0
 
             done_mdp = [info['done_mdp'] for info in infos]
             successes = max(successes, [info['success'] for info in infos])
@@ -226,8 +220,6 @@ def evaluate_ml10(args,
                 for i in range(num_processes):
                     imgs[i,0:30,0:30,:] = int(255*success_list[i]) #to distinguish success
                 imgs_array.append(imgs)
-
-
 
             if encoder is not None:
                 # update the hidden state
@@ -260,8 +252,6 @@ def evaluate_ml10(args,
             if np.sum(done) > 0:
                 done_indices = np.argwhere(done.flatten()).flatten()
                 state, belief, task = utl.reset_env(envs, args, indices=done_indices, state=state)
-                #if tag_virtual:
-                #    state[:, 38] = 1.0
 
         if args.render:
             imgs_array = np.array(imgs_array)
@@ -274,20 +264,12 @@ def evaluate_ml10(args,
                     rgb_img = cv2.cvtColor(img_array[j], cv2.COLOR_RGB2BGR)
                     out.write(rgb_img)
                 out.release()
-        #print('episode idx: ', episode_idx, 'meta_success: ', meta_successes, 'successes: ', successes)
+
         if save_episode_successes:
             episode_successes[:, episode_idx] = successes
         meta_successes = meta_successes+successes
     envs.close()
     meta_successes = meta_successes/num_episodes
-
-    '''
-    if save_episode_probs and args.vae_mixture_num>1:
-        episode_probs = episode_probs[:, :num_episodes, :, :].detach().cpu().numpy()
-        prob = prob.detach().cpu().numpy()
-    return returns_per_episode[:, :num_episodes].detach().cpu().numpy(), latent_mean.detach().cpu().numpy(), latent_logvar.detach().cpu().numpy(), np.array(successes), \
-           prob, episode_probs
-    '''
 
     if args.vae_mixture_num > 1:
         prob =prob.detach().cpu().numpy()

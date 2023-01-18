@@ -512,7 +512,6 @@ class MetaLearnerML10VariBAD:
 
         # --- evaluate policy ----
 
-        #if 0:
         if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
@@ -651,8 +650,6 @@ class MetaLearnerML10VariBAD:
 
         # --- log some other things ---
 
-        # if 0:
-        # if train_stats is not None and self.iter_idx>1:
         if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)

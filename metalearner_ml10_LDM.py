@@ -269,7 +269,6 @@ class MetaLearnerML10LDM:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step, virtual, z_intercept)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -477,7 +476,6 @@ class MetaLearnerML10LDM:
 
         # --- evaluate policy ----
 
-        #if 0:
         if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
@@ -500,7 +498,6 @@ class MetaLearnerML10LDM:
 
             for task_class in range(15):
                 for parametric_num in range(total_parametric_num // num_worker):
-                    #print([task_class, parametric_num])
                     task_list = np.concatenate((np.expand_dims(np.repeat(task_class, num_worker), axis=1),
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)
@@ -599,8 +596,6 @@ class MetaLearnerML10LDM:
 
         # --- log some other things ---
 
-        #if 0:
-        #if train_stats is not None and self.iter_idx>1:
         if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)
