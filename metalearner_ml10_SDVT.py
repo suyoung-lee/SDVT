@@ -277,11 +277,6 @@ class MetaLearnerML10SDVT:
         if self.args.vae_mixture_num > 1:
             y_intercept = self.sample_y(num_procs=self.args.num_processes, num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist=self.args.virtual_dist)
 
-        #resample_action = self.policy_resample.select_action(y_intercept.clone()).cpu().numpy().flatten()
-        #resample_indices = np.argwhere(resample_action == 1.0).flatten()
-        #if len(resample_indices) > 0:
-        #    y_intercept[resample_indices, :] = self.sample_y(num_procs=len(resample_indices), num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist=self.args.virtual_dist)
-        # insert initial observation / embeddings to rollout storage
         self.policy_storage.prev_state[0].copy_(prev_state)
 
         # log once before training

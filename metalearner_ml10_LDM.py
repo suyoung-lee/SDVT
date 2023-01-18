@@ -337,7 +337,7 @@ class MetaLearnerML10LDM:
                     #TODO1: for virtual envs, we need to store the initial states in a buffer
                     next_state, belief, task = utl.reset_env(self.envs, self.args, indices=done_indices, state=next_state)
 
-                    if not virtual: #resample y with new distribution
+                    if not virtual: #resample z with new distribution
                         z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, past_z = latent_sample.cpu())
 
 
