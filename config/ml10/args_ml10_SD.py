@@ -1,4 +1,3 @@
-#218 v11
 import argparse
 from utils.helpers import boolean_argument
 
@@ -9,11 +8,10 @@ def get_args(rest_args):
     # --- GENERAL ---
 
     # training parameters
-    parser.add_argument('--num_frames', type=int, default=10e8, help='number of frames to train')
+    parser.add_argument('--num_frames', type=int, default=25e7, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
-    parser.add_argument('--exp_label', default='varibad', help='label (typically name of method)')
+    parser.add_argument('--exp_label', default='SD', help='label (typically name of method)')
     parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
-    parser.add_argument('--test_env_name', default='ML10TESTEnv-v2', help='environment to train on')
 
     # --- POLICY ---
 
@@ -52,29 +50,29 @@ def get_args(rest_args):
     parser.add_argument('--policy_optimiser', type=str, default='adam', help='choose: rmsprop, adam')
 
     # PPO specifi
-    parser.add_argument('--ppo_num_epochs', type=int, default=2, help='number of epochs per PPO update') #v11.2 221203 2->10
-    parser.add_argument('--ppo_num_minibatch', type=int, default=25, help='number of minibatches to split the data') #v11.2 221203 1-->1562
+    parser.add_argument('--ppo_num_epochs', type=int, default=5, help='number of epochs per PPO update')
+    parser.add_argument('--ppo_num_minibatch', type=int, default=10, help='number of minibatches to split the data')
     parser.add_argument('--ppo_use_huberloss', type=boolean_argument, default=True, help='use huberloss instead of MSE')
     parser.add_argument('--ppo_use_clipped_value_loss', type=boolean_argument, default=True, help='clip value loss')
-    parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param') #v11: 0.1->0.2
+    parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param')
     parser.add_argument('--ppo_disc',  type=boolean_argument, default=False, help='dimension-wise clipping')
 
     # other hyperparameters
-    parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)') #v11: 7e-4->5e-4
+    parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)')
     parser.add_argument('--num_processes', type=int, default=10,
                         help='how many training CPU processes / parallel environments to use (default: 16)')
-    parser.add_argument('--policy_num_steps', type=int, default=5000, #v11 part2: 500->5000
+    parser.add_argument('--policy_num_steps', type=int, default=5000,
                         help='number of env steps to do (per process) before updating')
     parser.add_argument('--policy_eps', type=float, default=1e-8, help='optimizer epsilon (1e-8 for ppo, 1e-5 for a2c)')
     parser.add_argument('--policy_init_std', type=float, default=1.0, help='only used for continuous actions')
-    parser.add_argument('--policy_min_std', type=float, default=None, help='minimum std of policy only used for continuous actions') #v11
-    parser.add_argument('--policy_max_std', type=float, default=None, help='maximum std of policy only used for continuous actions') #v11
+    parser.add_argument('--policy_min_std', type=float, default=0.5, help='minimum std of policy only used for continuous actions')
+    parser.add_argument('--policy_max_std', type=float, default=1.5, help='maximum std of policy only used for continuous actions')
     parser.add_argument('--policy_value_loss_coef', type=float, default=0.5, help='value loss coefficient')
-    parser.add_argument('--policy_entropy_coef', type=float, default=0.001, help='entropy term coefficient') #v11 0.001 ->5e-6, different entropy so keep it
+    parser.add_argument('--policy_entropy_coef', type=float, default=0.001, help='entropy term coefficient')
     parser.add_argument('--policy_gamma', type=float, default=0.99, help='discount factor for rewards')
     parser.add_argument('--policy_use_gae', type=boolean_argument, default=True,
                         help='use generalized advantage estimation')
-    parser.add_argument('--policy_tau', type=float, default=0.90, help='gae parameter') #v11: 0.9-> 0.95
+    parser.add_argument('--policy_tau', type=float, default=0.90, help='gae parameter')
     parser.add_argument('--use_proper_time_limits', type=boolean_argument, default=True,
                         help='treat timeout and death differently (important in mujoco)')
     parser.add_argument('--policy_max_grad_norm', type=float, default=0.5, help='max norm of gradients')
@@ -94,17 +92,17 @@ def get_args(rest_args):
     parser.add_argument('--vae_batch_num_trajs', type=int, default=10,
                         help='how many trajectories to use for VAE update')
     parser.add_argument('--tbptt_stepsize', type=int, default=50,
-                        help='stepsize for truncated backpropagation through time; None uses max (horizon of BAMDP)') #50->None, chaged at v4->v5
+                        help='stepsize for truncated backpropagation through time; None uses max (horizon of BAMDP)')
     parser.add_argument('--vae_subsample_elbos', type=int, default=100,
-                        help='for how many timesteps to compute the ELBO; None uses all') #50->100, chaged at v4->v5
+                        help='for how many timesteps to compute the ELBO; None uses all')
     parser.add_argument('--vae_subsample_decodes', type=int, default=100,
-                        help='number of reconstruction terms to subsample; None uses all') #50->100, chaged at v4->v5
+                        help='number of reconstruction terms to subsample; None uses all')
     parser.add_argument('--vae_avg_elbo_terms', type=boolean_argument, default=True,
                         help='Average ELBO terms (instead of sum)')
     parser.add_argument('--vae_avg_reconstruction_terms', type=boolean_argument, default=True,
                         help='Average reconstruction terms (instead of sum)')
     parser.add_argument('--num_vae_updates', type=int, default=10,
-                        help='how many VAE update steps to take per meta-iteration')  #1->10, chaged at v4->v5
+                        help='how many VAE update steps to take per meta-iteration')
     parser.add_argument('--pretrain_len', type=int, default=0, help='for how many updates to pre-train the VAE')
     parser.add_argument('--kl_weight', type=float, default=0.1, help='weight for the KL term')
 
@@ -138,7 +136,7 @@ def get_args(rest_args):
     parser.add_argument('--rew_loss_coeff', type=float, default=10, help='weight for state loss (vs reward loss)')
     parser.add_argument('--input_prev_state', type=boolean_argument, default=True, help='use prev state for rew pred')
     parser.add_argument('--input_action', type=boolean_argument, default=True, help='use prev action for rew pred')
-    parser.add_argument('--reward_decoder_layers', nargs='+', type=int, default=[64, 64, 32]) #[64, 32]->[64, 64, 32], chaged at v4->v5
+    parser.add_argument('--reward_decoder_layers', nargs='+', type=int, default=[64, 64, 32])
     parser.add_argument('--multihead_for_reward', type=boolean_argument, default=False,
                         help='one head per reward pred (i.e. per state)')
     parser.add_argument('--rew_pred_type', type=str, default='deterministic',
@@ -148,9 +146,9 @@ def get_args(rest_args):
                              'deterministic (treat as regression problem)')
 
     # - decoder: state transitions
-    parser.add_argument('--decode_state', type=boolean_argument, default=True, help='use state decoder') #False->True, chaged at v4->v5
-    parser.add_argument('--state_loss_coeff', type=float, default=1000, help='weight for state loss') #v11: 10000->1000
-    parser.add_argument('--state_decoder_layers', nargs='+', type=int, default=[64, 64, 32]) #[64, 32]->[64, 64, 32], chaged at v4->v5
+    parser.add_argument('--decode_state', type=boolean_argument, default=True, help='use state decoder')
+    parser.add_argument('--state_loss_coeff', type=float, default=1000, help='weight for state loss')
+    parser.add_argument('--state_decoder_layers', nargs='+', type=int, default=[64, 64, 32])
     parser.add_argument('--state_pred_type', type=str, default='deterministic', help='choose: deterministic, gaussian')
 
     # - decoder: ground-truth task ("varibad oracle", after Humplik et al. 2019)
@@ -176,7 +174,7 @@ def get_args(rest_args):
     # --- Extrapolate ----
     parser.add_argument('--vae_extrapolate', type=boolean_argument, default=False,
                         help='Use extrapolate structured VAE')
-    parser.add_argument('--ext_loss_coeff', type=float, default=1.0,
+    parser.add_argument('--ext_loss_coeff', type=float, default=0.0,
                         help='extrapolation loss coefficient')
 
     # combining vae and RL loss
@@ -209,7 +207,7 @@ def get_args(rest_args):
     parser.add_argument('--render', type=boolean_argument, default=False,
                         help='render during eval')
     # general settings
-    parser.add_argument('--seed',  nargs='+', type=int, default=[73])
+    parser.add_argument('--seed',  nargs='+', type=int, default=[20])
     parser.add_argument('--deterministic_execution', type=boolean_argument, default=False,
                         help='Make code fully deterministic. Expects 1 process and uses deterministic CUDNN')
 
@@ -217,10 +215,10 @@ def get_args(rest_args):
     # --- Virtual ---
     parser.add_argument('--virtual_ratio', type=float, default=0.0, help='virtual training ratio')
     parser.add_argument('--virtual_ratio_increment', type=float, default=0.0, help='virtual ratio increased per 100M steps')
-    parser.add_argument('--num_virtual_skills', type=int, default=5)
-    parser.add_argument('--include_smaller', type=boolean_argument, default=True,
+    parser.add_argument('--num_virtual_skills', type=int, default=3)
+    parser.add_argument('--include_smaller', type=boolean_argument, default=False,
                         help='allow smaller number of virtual skills')
-    parser.add_argument('--virtual_dist', default='uni', help='virtual skill distribution, currently uni and dir')
+    parser.add_argument('--virtual_dist', default='dir', help='virtual skill distribution, currently uni and dir')
     parser.add_argument('--virtual_intrinsic', type=float, default=0.0,
                         help='weight for virtual reward')
 

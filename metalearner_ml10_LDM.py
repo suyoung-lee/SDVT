@@ -1,4 +1,3 @@
-#218 v11
 import os
 import time
 
@@ -11,7 +10,6 @@ from algorithms.online_storage import OnlineStorage
 from algorithms.ppo import PPO, PPO_DISC
 from environments.parallel_envs import make_vec_envs
 from models.policy import Policy
-#from models.policy_resample import PolicyResample
 from utils import evaluation as utl_eval
 from utils import helpers as utl
 from utils.tb_logger import TBLogger
@@ -36,7 +34,7 @@ class MetaLearnerML10LDM:
 
         self.args = args
         self.args.pass_prob_to_policy = False
-        self.total_period = self.args.post_period * self.args.max_rollouts_per_task
+        self.virtual_ratio = self.args.virtual_ratio
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
         # calculate number of updates and keep count of frames/iterations
@@ -226,16 +224,16 @@ class MetaLearnerML10LDM:
                 z_intercept = torch.zeros(num_procs, latent_dim).to(device)
             else:
                 for i in range(num_procs):
-                    if include_smaller:
-                        index = random.sample(range(num_procs), random.choice(range(1, num_virtual_skills + 1)))
+                    if self.args.include_smaller:
+                        index = random.sample(range(num_procs), random.choice(range(1, self.args.num_virtual_skills + 1)))
                     else:
-                        index = random.sample(range(num_procs), num_virtual_skills)
+                        index = random.sample(range(num_procs), self.args.num_virtual_skills)
                     alpha = 1e-20 * torch.ones(num_procs)
                     alpha[index] = 1.0
                     z_dist = torch.distributions.dirichlet.Dirichlet(alpha)
                     z_sample[i, :] = torch.matmul(z_dist.sample(), past_z)
                 z_intercept = past_z.clone()
-        return z_intercept
+        return z_intercept.to(device)
 
     def train(self):
         """ Main Meta-Training loop """
@@ -271,7 +269,7 @@ class MetaLearnerML10LDM:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step)
+                #print(self.iter_idx, step, virtual, z_intercept)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -318,14 +316,7 @@ class MetaLearnerML10LDM:
                 # (last state might include useful task info)
                 if not (self.args.disable_decoder and self.args.disable_kl_term):
                     #if not virtual: #do not insert virtual in the vae buffer? maybe we have to?
-                    if virtual:
-                        self.vae.rollout_storage_virtual.insert(prev_state.clone(),
-                                                        action.detach().clone(),
-                                                        next_state.clone(),
-                                                        rew_raw.clone(),
-                                                        done.clone(),
-                                                        task.clone() if task is not None else None)
-                    else:
+                    if not virtual:
                         self.vae.rollout_storage.insert(prev_state.clone(),
                                                         action.detach().clone(),
                                                         next_state.clone(),
@@ -346,7 +337,7 @@ class MetaLearnerML10LDM:
                     #TODO1: for virtual envs, we need to store the initial states in a buffer
                     next_state, belief, task = utl.reset_env(self.envs, self.args, indices=done_indices, state=next_state)
 
-                    if virtual: #resample y with new distribution
+                    if not virtual: #resample y with new distribution
                         z_intercept = self.sample_z(num_procs=self.args.num_processes, latent_dim = self.args.latent_dim, past_z = latent_sample.cpu())
 
 
@@ -420,10 +411,7 @@ class MetaLearnerML10LDM:
         """
 
         # for each process, get the current batch (zero-padded obs/act/rew + length indicators)
-        if virtual:
-            prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage_virtual.get_running_batch()
-        else:
-            prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
+        prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
 
         # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
         all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states = self.vae.encoder(actions=act,
@@ -494,9 +482,9 @@ class MetaLearnerML10LDM:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
-                total_parametric_num = 10
+                total_parametric_num = 50
             else:
-                total_parametric_num = 10
+                total_parametric_num = 50
 
             num_worker = 10
             returns_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))
