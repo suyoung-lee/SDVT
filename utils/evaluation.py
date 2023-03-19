@@ -186,7 +186,7 @@ def evaluate_ml10(args,
 
     meta_successes = np.zeros(num_processes)
     for episode_idx in range(num_episodes):
-        successes = [0] * num_processes
+        successes = np.zeros(num_processes)
         if args.render: #save videos for each rollout episode
             for i in range(num_processes):
                 os.makedirs(
@@ -212,7 +212,7 @@ def evaluate_ml10(args,
             [state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(envs, action, args)
 
             done_mdp = [info['done_mdp'] for info in infos]
-            successes = max(successes, [info['success'] for info in infos])
+            successes = np.fmax(successes, [info['success'] for info in infos])
 
             if args.render:
                 imgs = np.array([info['image'] for info in infos])
