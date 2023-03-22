@@ -114,7 +114,7 @@ def evaluate(args,
 
     return returns_per_episode[:, :num_episodes]
 
-def evaluate_ml10(args,
+def evaluate_metaworld(args,
              policy,
              ret_rms,
              iter_idx,

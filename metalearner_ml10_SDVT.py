@@ -50,7 +50,7 @@ class MetaLearnerML10SDVT:
             self.iter_idx = int(self.args.load_iter)
 
         self.recent_train_success = np.zeros(10)
-        self.task_count = np.zeros((self.args.num_processes))
+        self.task_count = np.zeros(10)
 
         # initialise tensorboard logger
         self.logger = TBLogger(self.args, self.args.exp_label)
@@ -601,7 +601,7 @@ class MetaLearnerML10SDVT:
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)
 
-                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_ml10(
+                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_metaworld(
                         args=self.args,
                         policy=self.policy,
                         ret_rms=ret_rms,

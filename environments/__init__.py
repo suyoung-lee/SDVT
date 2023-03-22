@@ -138,6 +138,15 @@ register(
     max_episode_steps=500,
 )
 
+# # ML 45
+register(
+    'ML45Env-v2',
+    entry_point='environments.metaworld.ml45:ML45',
+    kwargs={'max_episode_steps': 500,
+            'SEED': 10,
+            },
+    max_episode_steps=500,
+)
 
 #
 # # GridWorld

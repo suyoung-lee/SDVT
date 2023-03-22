@@ -12,12 +12,18 @@ import json
 # get configs
 from config.ml10 import \
     args_ml10_SDVT, args_ml10_SD, args_ml10_LDM, args_ml10_VariBAD
+from config.ml45 import \
+    args_ml45_SDVT, args_ml45_SD, args_ml45_LDM, args_ml45_VariBAD
 from environments.parallel_envs import make_vec_envs
 from learner import Learner
 from metalearner import MetaLearner
-from metalearner_ml10_VariBAD import MetaLearnerML10VariBAD
 from metalearner_ml10_SDVT import MetaLearnerML10SDVT
 from metalearner_ml10_LDM import MetaLearnerML10LDM
+from metalearner_ml10_VariBAD import MetaLearnerML10VariBAD
+from metalearner_ml45_SDVT import MetaLearnerML45SDVT
+from metalearner_ml45_LDM import MetaLearnerML45LDM
+from metalearner_ml45_VariBAD import MetaLearnerML45VariBAD
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -28,7 +34,8 @@ def main():
     env = args.env_type
 
     # ml10
-    if env in ['ml10-SDVT','ml10-SD','ml10-LDM', 'ml10-VariBAD' ]:
+    if env in ['ml10-SDVT','ml10-SD','ml10-LDM', 'ml10-VariBAD',
+               'ml45-SDVT','ml45-SD','ml45-LDM', 'ml45-VariBAD',]:
         if args.load_dir is None:
             if env == 'ml10-SDVT':
                 args = args_ml10_SDVT.get_args(rest_args)
@@ -38,6 +45,14 @@ def main():
                 args = args_ml10_LDM.get_args(rest_args)
             elif env == 'ml10-VariBAD':
                 args = args_ml10_VariBAD.get_args(rest_args)
+            elif env == 'ml45-SDVT':
+                args = args_ml45_SDVT.get_args(rest_args)
+            elif env == 'ml45-SD':
+                args = args_ml45_SD.get_args(rest_args)
+            elif env == 'ml45-LDM':
+                args = args_ml45_LDM.get_args(rest_args)
+            elif env == 'ml45-VariBAD':
+                args = args_ml45_VariBAD.get_args(rest_args)
             args.load_dir = None
             args.load_iter = None
         else:
@@ -102,6 +117,18 @@ def main():
         elif env == 'ml10-LDM':
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10LDM(args)
+        if env == 'ml45-SDVT':
+            args.results_log_dir = args.results_log_dir
+            learner = MetaLearnerML45SDVT(args)
+        elif env == 'ml45-SD':
+            args.results_log_dir = args.results_log_dir
+            learner = MetaLearnerML45SDVT(args)
+        elif env == 'ml45-VariBAD':
+            args.results_log_dir = args.results_log_dir
+            learner = MetaLearnerML45VariBAD(args)
+        elif env == 'ml45-LDM':
+            args.results_log_dir = args.results_log_dir
+            learner = MetaLearnerML45LDM(args)
         elif args.disable_metalearner:
             # If `disable_metalearner` is true, the file `learner.py` will be used instead of `metalearner.py`.
             # This is a stripped down version without encoder, decoder, stochastic latent variables, etc.

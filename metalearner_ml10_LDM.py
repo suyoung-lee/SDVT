@@ -46,7 +46,7 @@ class MetaLearnerML10LDM:
             self.frames = (int(self.args.load_iter)+1) * self.args.policy_num_steps * self.args.num_processes
             self.iter_idx = int(self.args.load_iter)
         self.recent_train_success = np.zeros(10)
-        self.task_count = np.zeros((self.args.num_processes))
+        self.task_count = np.zeros(10)
         #self.return_list = torch.zeros((self.args.num_processes)).to(device)
 
         # initialise tensorboard logger
@@ -502,7 +502,7 @@ class MetaLearnerML10LDM:
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)
 
-                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_ml10(
+                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_metaworld(
                         args=self.args,
                         policy=self.policy,
                         ret_rms=ret_rms,

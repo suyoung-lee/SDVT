@@ -10,7 +10,6 @@ from algorithms.online_storage import OnlineStorage
 from algorithms.ppo import PPO, PPO_DISC
 from environments.parallel_envs import make_vec_envs
 from models.policy import Policy
-from models.policy_resample import PolicyResample
 from utils import evaluation as utl_eval
 from utils import helpers as utl
 from utils.tb_logger import TBLogger
@@ -48,7 +47,7 @@ class MetaLearnerML10VariBAD:
             self.frames = (int(self.args.load_iter) + 1) * self.args.policy_num_steps * self.args.num_processes
             self.iter_idx = int(self.args.load_iter)
         self.recent_train_success = np.zeros(10)
-        self.task_count = np.zeros((self.args.num_processes))
+        self.task_count = np.zeros(10)
         self.return_list = torch.zeros((self.args.num_processes)).to(device)
 
         # initialise tensorboard logger
@@ -101,8 +100,6 @@ class MetaLearnerML10VariBAD:
             self.vae = VaribadVAE(self.args, self.logger, lambda: self.iter_idx)
         self.policy_storage = self.initialise_policy_storage()
         self.policy = self.initialise_policy()
-        self.policy_resample = PolicyResample(self.args, self.args.state_dim, self.args.latent_dim,
-                                              self.args.vae_mixture_num).to(device)
 
         if self.args.load_dir is not None:
             print('loading pretrained model from ', self.args.load_dir)
@@ -337,25 +334,6 @@ class MetaLearnerML10VariBAD:
                     next_state, belief, task = utl.reset_env(self.envs, self.args,
                                                              indices=done_indices, state=next_state)
 
-                    if self.args.vae_mixture_num > 1:
-                        if self.args.resample_tasks:
-                            if self.iter_idx > 10:
-                                self.policy_resample.append_return_list(self.return_list)
-                                self.policy_resample.update(ret_rms = self.envs.venv.ret_rms)
-                            self.return_list = torch.zeros((self.args.num_processes)).to(device)
-
-                            with torch.no_grad():
-                                if self.args.vae_mixture_num > 1:
-                                    latent_sample, latent_mean, latent_logvar, hidden_state, \
-                                    y, z, mu, var, logits, prob = self.encode_running_trajectory()
-                                else:
-                                    latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory()
-                                    y = z = mu = var = logits = prob = None
-                            resample_action = self.policy_resample.select_action(
-                                torch.cat((next_state, mu, var, prob), dim=-1)).cpu().numpy().flatten()
-                            resample_indices = np.argwhere(resample_action == 1.0).flatten()
-                            next_state, belief, task = utl.reset_env(self.envs, self.args, indices=resample_indices,
-                                                                     state=next_state)
 
                 # TODO: deal with resampling for posterior sampling algorithm
                 #     latent_sample = latent_sample
@@ -545,7 +523,7 @@ class MetaLearnerML10VariBAD:
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)
 
-                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_ml10(
+                    returns_per_episode, latent_mean, latent_logvar, successes,  prob, episode_probs, episode_successes = utl_eval.evaluate_metaworld(
                         args=self.args,
                         policy=self.policy,
                         ret_rms=ret_rms,
@@ -626,7 +604,6 @@ class MetaLearnerML10VariBAD:
 
                 torch.save(self.policy.actor_critic, os.path.join(save_path, f"policy{idx_label}.pt"))
                 torch.save(self.vae.encoder, os.path.join(save_path, f"encoder{idx_label}.pt"))
-                torch.save(self.policy_resample, os.path.join(save_path, f"policy_resample{idx_label}.pt"))
                 if self.vae.state_decoder is not None:
                     torch.save(self.vae.state_decoder, os.path.join(save_path, f"state_decoder{idx_label}.pt"))
                 if self.vae.reward_decoder is not None:
@@ -635,7 +612,6 @@ class MetaLearnerML10VariBAD:
                     torch.save(self.vae.task_decoder, os.path.join(save_path, f"task_decoder{idx_label}.pt"))
                 torch.save(self.vae.optimiser_vae.state_dict(), os.path.join(save_path, f"optimiser_vae{idx_label}.pt"))
                 torch.save(self.policy.optimiser.state_dict(), os.path.join(save_path, f"optimiser_pol{idx_label}.pt"))
-                torch.save(self.policy_resample.optimiser.state_dict(), os.path.join(save_path, f"optimiser_pol_res{idx_label}.pt"))
                 # save normalisation params of envs
                 if self.args.norm_rew_for_policy:
                     rew_rms = self.envs.venv.ret_rms
