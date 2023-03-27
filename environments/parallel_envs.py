@@ -15,7 +15,7 @@ from environments.wrappers import TimeLimitMask, VariBadWrapper
 
 def make_env(env_id, seed, rank, episodes_per_task, tasks, add_done_info, **kwargs):
     def _thunk():
-        if env_id in ['ML10Env-v2', 'ML10POSTEnv-v2', 'ML10RENDEREnv-v2', 'ML10TESTEnv-v2']:
+        if env_id in ['ML10Env-v2', 'ML10POSTEnv-v2', 'ML10RENDEREnv-v2', 'ML10TESTEnv-v2', 'ML45Env-v2']:
             env = gym.make(env_id, SEED= seed, **kwargs)
         else:
             env = gym.make(env_id, **kwargs)

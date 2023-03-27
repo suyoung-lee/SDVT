@@ -189,9 +189,14 @@ def evaluate_metaworld(args,
         successes = np.zeros(num_processes)
         if args.render: #save videos for each rollout episode
             for i in range(num_processes):
-                os.makedirs(
-                    'renders/' + args.load_dir + '{}/task{:2d}/subtask{:2d}'.format(args.load_iter, task_list[i, 0],
-                                                                                    task_list[i, 1]), exist_ok=True)
+                if args.load_iter is None:
+                    os.makedirs(
+                        'renders/{}/task{:2d}/subtask{:2d}'.format(iter_idx, task_list[i, 0],
+                                                                                        task_list[i, 1]), exist_ok=True)
+                else:
+                    os.makedirs(
+                        'renders/' + args.load_dir + '{}/task{:2d}/subtask{:2d}'.format(args.load_iter, task_list[i, 0],
+                                                                                        task_list[i, 1]), exist_ok=True)
             imgs_array = []
         for step_idx in range(num_steps):
             with torch.no_grad():
@@ -257,7 +262,11 @@ def evaluate_metaworld(args,
             imgs_array = np.array(imgs_array)
             for i in range(num_processes):
                 img_array = imgs_array[:,i,:,:,:] #(500x10x480x640x3) to (500x480x640x3)
-                pathout = 'renders/'+args.load_dir+ '{}/task{:2d}/subtask{:2d}/task{:2d}_subtask{:2d}_epi_{:2d}.mp4'.format(args.load_iter,task_list[i,0],task_list[i,1],task_list[i,0],task_list[i,1],episode_idx)
+
+                if args.load_iter is None:
+                    pathout = 'renders/{}/task{:2d}/subtask{:2d}/task{:2d}_subtask{:2d}_epi_{:2d}.mp4'.format(iter_idx, task_list[i, 0], task_list[i, 1], task_list[i, 0], task_list[i, 1], episode_idx)
+                else:
+                    pathout = 'renders/'+args.load_dir+ '{}/task{:2d}/subtask{:2d}/task{:2d}_subtask{:2d}_epi_{:2d}.mp4'.format(args.load_iter,task_list[i,0],task_list[i,1],task_list[i,0],task_list[i,1],episode_idx)
                 out = cv2.VideoWriter(pathout, cv2.VideoWriter_fourcc(*'mp4v'), 50, (np.shape(img_array)[2],np.shape(img_array)[1])) #width, height
                 horizon = np.shape(img_array)[0]
                 for j in range(horizon):

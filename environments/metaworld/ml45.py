@@ -75,7 +75,7 @@ class ML45(Env):
     def reset(self, task=None):
         if task is not None:
             self.reset_task(task)
-        print('reset call end ',task, self.get_task())
+        #print('reset call end ',task, self.get_task())
         return self._reset_model()
 
     def _get_obs(self):
@@ -88,7 +88,7 @@ class ML45(Env):
         ob = self._get_obs()
 
         info = {'task': self.get_task(), 'success': info['success']}
-
+        #info = {'task': self.get_task(), 'success': info['success'], 'image': self._env.render(offscreen=True)}  # for rendering
         return ob, reward, done, info
 
     @staticmethod

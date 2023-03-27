@@ -666,7 +666,7 @@ class MetaLearnerML45SDVT:
                 if save_episode_probs:
                     np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                             episode_probs_array)
-            self.task_count = np.zeros((self.args.num_processes))
+            self.task_count = np.zeros(45)
             self.recent_train_success = taskwise_mean_success[:45]
         # --- save models ---
         if (self.iter_idx + 1) % self.args.save_interval == 0:
