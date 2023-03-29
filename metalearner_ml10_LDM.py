@@ -269,6 +269,7 @@ class MetaLearnerML10LDM:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
+                #print(self.iter_idx, step)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -480,9 +481,9 @@ class MetaLearnerML10LDM:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
-                total_parametric_num = 50
+                total_parametric_num = 10
             else:
-                total_parametric_num = 50
+                total_parametric_num = 10
 
             num_worker = 10
             returns_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))

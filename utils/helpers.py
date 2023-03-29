@@ -4,7 +4,6 @@ import pickle
 import random
 import warnings
 from distutils.util import strtobool
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -226,7 +225,10 @@ def recompute_embeddings(
     else:
         for i in range(policy_storage.actions.shape[0]):
             # reset hidden state of the GRU when we reset the task
+
+
             h = encoder.reset_hidden(h, policy_storage.done[i + 1])
+
 
             ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
                                     policy_storage.next_state[i:i + 1],
@@ -237,6 +239,7 @@ def recompute_embeddings(
                                     detach_every=detach_every
                                     )
 
+
             # print(i, reset_task.sum())
             # print(i, (policy_storage.latent_mean[i + 1] - tm).sum())
             # print(i, (policy_storage.latent_logvar[i + 1] - tl).sum())
@@ -245,6 +248,7 @@ def recompute_embeddings(
             latent_sample.append(ts)
             latent_mean.append(tm)
             latent_logvar.append(tl)
+
 
     if update_idx == 0:
         try:

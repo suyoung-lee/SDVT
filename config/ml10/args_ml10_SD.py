@@ -15,6 +15,9 @@ def get_args(rest_args):
 
     # --- POLICY ---
 
+    #using separate GRU
+    parser.add_argument('--policy_separate_gru', type=boolean_argument, default=False, help='condition policy on state')
+
     # what to pass to the policy (note this is after the encoder)
     parser.add_argument('--pass_state_to_policy', type=boolean_argument, default=True, help='condition policy on state')
     parser.add_argument('--pass_latent_to_policy', type=boolean_argument, default=True, help='condition policy on VAE latent')

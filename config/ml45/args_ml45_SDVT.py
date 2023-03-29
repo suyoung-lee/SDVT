@@ -15,6 +15,9 @@ def get_args(rest_args):
 
     # --- POLICY ---
 
+    #using separate GRU
+    parser.add_argument('--policy_separate_gru', type=boolean_argument, default=False, help='condition policy on state')
+
     # what to pass to the policy (note this is after the encoder)
     parser.add_argument('--pass_state_to_policy', type=boolean_argument, default=True, help='condition policy on state')
     parser.add_argument('--pass_latent_to_policy', type=boolean_argument, default=True, help='condition policy on VAE latent')
@@ -112,7 +115,7 @@ def get_args(rest_args):
                         help='split batches up by elbo term (to save memory of if ELBOs are of different length)')
 
     #Gaussian mixture
-    parser.add_argument('--vae_mixture_num', type=int, default=5,
+    parser.add_argument('--vae_mixture_num', type=int, default=10,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import time
 
 from utils import helpers as utl
 
@@ -83,9 +84,12 @@ class PPO:
         dist_entropy_epoch = 0
         loss_epoch = 0
         for e in range(self.ppo_epoch):
-
+            #print('ppo epoch: ', e)
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
+
+                #time0
+                #time0 = time.time()
 
                 state_batch, belief_batch, task_batch, prob_batch, \
                 actions_batch, latent_sample_batch, latent_mean_batch, latent_logvar_batch, value_preds_batch, \
@@ -133,20 +137,32 @@ class PPO:
                 else:
                     value_loss = 0.5 * (return_batch - values).pow(2).mean()
 
+                #time1
+                #time1 = time.time()
+                #print("time1:", time1-time0)
+
                 # zero out the gradients
                 self.optimiser.zero_grad()
                 if rlloss_through_encoder:
                     self.optimiser_vae.zero_grad()
 
+                #time2
+                #time2 = time.time()
+                #print("time2:", time2-time1)
+
                 # compute policy loss and backprop
                 loss = value_loss * self.value_loss_coef + action_loss - dist_entropy * self.entropy_coef
 
                 # compute vae loss and backprop
-                if rlloss_through_encoder:
-                    loss += self.args.vae_loss_coeff * compute_vae_loss()
+                #if rlloss_through_encoder:
+                #    loss += self.args.vae_loss_coeff * compute_vae_loss()
 
                 # compute gradients (will attach to all networks involved in this computation)
                 loss.backward()
+
+                #time3
+                #time3 = time.time()
+                #print("time3:", time3-time2)
 
                 # clip gradients
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
@@ -154,10 +170,19 @@ class PPO:
                     if self.args.encoder_max_grad_norm is not None:
                         nn.utils.clip_grad_norm_(encoder.parameters(), self.args.encoder_max_grad_norm)
 
+                #time4
+                #time4 = time.time()
+                #print("time4:", time4-time3)
+
+
                 # update
                 self.optimiser.step()
                 if rlloss_through_encoder:
                     self.optimiser_vae.step()
+
+                #time5
+                #time5 = time.time()
+                #print("time5:", time5-time4)
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
@@ -167,8 +192,11 @@ class PPO:
                 if rlloss_through_encoder:
                     # recompute embeddings (to build computation graph)
                     utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
-                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args,
-                                                                                              'tbptt_stepsize') else None)
+                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None)
+
+                #time6
+                #time6 = time.time()
+                #print("ppo.py recompute_embeddings time", time6-time5)
 
         if (not rlloss_through_encoder) and (self.optimiser_vae is not None):
             for _ in range(self.args.num_vae_updates):
@@ -245,7 +273,9 @@ class PPO_DISC:
                policy_storage,
                encoder=None,  # variBAD encoder
                rlloss_through_encoder=False,  # whether or not to backprop RL loss through encoder
-               compute_vae_loss=None  # function that can compute the VAE loss
+               compute_vae_loss=None,  # function that can compute the VAE loss
+               policy_storage_pol = None,  # for updating policy gru
+               encoder_pol = None
                ):
 
         # -- get action values --
@@ -272,7 +302,6 @@ class PPO_DISC:
         dist_entropy_epoch = 0
         loss_epoch = 0
         for e in range(self.ppo_epoch):
-
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
 

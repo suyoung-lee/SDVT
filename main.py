@@ -117,7 +117,7 @@ def main():
         elif env == 'ml10-LDM':
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10LDM(args)
-        if env == 'ml45-SDVT':
+        elif env == 'ml45-SDVT':
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML45SDVT(args)
         elif env == 'ml45-SD':

@@ -257,6 +257,9 @@ class MetaLearnerML10VariBAD:
             if self.args.vae_mixture_num > 1:
                 self.policy_storage.prob.append(prob.clone())
 
+            #print('iter: ', self.iter_idx, torch.mean(self.return_list))
+            self.return_list = torch.zeros((self.args.num_processes)).to(device)
+
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
                 #print(self.iter_idx, step)
@@ -282,7 +285,8 @@ class MetaLearnerML10VariBAD:
 
 
                 #self.return_list = self.args.policy_gamma * self.return_list + rew_normalised.flatten()
-                self.return_list = self.args.policy_gamma * self.return_list + rew_raw.flatten()
+                #self.return_list = self.args.policy_gamma * self.return_list + rew_raw.flatten()
+                self.return_list = self.return_list + rew_raw.flatten()
                 done = torch.from_numpy(np.array(done, dtype=int)).to(device).float().view((-1, 1))
                 # create mask for episode ends
                 masks_done = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done]).to(device)
@@ -489,14 +493,14 @@ class MetaLearnerML10VariBAD:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-
-        if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        if 0:
+        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
-                total_parametric_num = 50
+                total_parametric_num = 10
             else:
-                total_parametric_num = 50
+                total_parametric_num = 10
 
             num_worker = 10
             returns_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))
