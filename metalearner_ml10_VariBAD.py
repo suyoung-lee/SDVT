@@ -14,6 +14,7 @@ from utils import evaluation as utl_eval
 from utils import helpers as utl
 from utils.tb_logger import TBLogger
 from vae import VaribadVAE
+from models.policy_encoder import PolicyEncoder
 import torch.nn.functional as F
 
 import metaworld
@@ -90,9 +91,9 @@ class MetaLearnerML10VariBAD:
         # initialise VAE and policy
         self.vae = VaribadVAE(self.args, self.logger, lambda: self.iter_idx)
         if self.args.policy_separate_gru:
-            self.vae_pol= VaribadVAE(self.args, self.logger, lambda: self.iter_idx)
+            self.encoder_pol= PolicyEncoder(self.args, self.logger, lambda: self.iter_idx)
         else:
-            self.vae_pol = None
+            self.encoder_pol = None
 
         self.policy_storage = self.initialise_policy_storage()
         self.policy_storage_pol = self.initialise_policy_storage()
@@ -196,7 +197,7 @@ class MetaLearnerML10VariBAD:
                 use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
-                optimiser_vae_pol=self.vae_pol.optimiser_vae if self.vae_pol is not None else None,
+                optimiser_encoder_pol=self.encoder_pol.optimiser_vae if self.encoder_pol is not None else None,
             )
         else:
             raise NotImplementedError
@@ -223,7 +224,7 @@ class MetaLearnerML10VariBAD:
             with torch.no_grad():
                 latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory(encoder = self.vae.encoder)
                 if self.args.policy_separate_gru:
-                    latent_pol, hidden_state_pol = self.encode_running_trajectory_pol(encoder = self.vae_pol.encoder)
+                    latent_pol, hidden_state_pol = self.encode_running_trajectory_pol(encoder = self.encoder_pol.encoder)
                 y = z = mu = var = logits = prob = None
 
             # add this initial hidden state to the policy storage
@@ -282,7 +283,7 @@ class MetaLearnerML10VariBAD:
                         vae_mixture_num=1)
                     if self.args.policy_separate_gru:
                         latent_pol, hidden_state_pol = utl.update_encoding_pol(
-                            encoder=self.vae_pol.encoder,
+                            encoder=self.encoder_pol.encoder,
                             next_obs=next_state,
                             action=action,
                             reward=rew_raw,
@@ -407,7 +408,7 @@ class MetaLearnerML10VariBAD:
         prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
 
         # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
-        all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states = encoder(actions=act,
+        all_latent_means, all_hidden_states = encoder(actions=act,
                                                                                                        states=next_obs,
                                                                                                        rewards=rew,
                                                                                                        hidden_state=None,
@@ -454,7 +455,7 @@ class MetaLearnerML10VariBAD:
             policy_train_stats = self.policy.update(
                 policy_storage=self.policy_storage,
                 encoder=self.vae.encoder,
-                encoder_pol = self.vae_pol.encoder if self.args.policy_separate_gru else None,
+                encoder_pol = self.encoder_pol.encoder if self.args.policy_separate_gru else None,
                 rlloss_through_encoder=self.args.rlloss_through_encoder,
                 policy_separate_gru = self.args.policy_separate_gru,
                 compute_vae_loss=self.vae.compute_vae_loss)
@@ -579,7 +580,7 @@ class MetaLearnerML10VariBAD:
                 if self.vae.task_decoder is not None:
                     torch.save(self.vae.task_decoder, os.path.join(save_path, f"task_decoder{idx_label}.pt"))
                 if self.args.policy_separate_gru:
-                    torch.save(self.vae_pol.encoder, os.path.join(save_path, f"policy_encoder{idx_label}.pt"))
+                    torch.save(self.encoder_pol.encoder, os.path.join(save_path, f"policy_encoder{idx_label}.pt"))
 
                 torch.save(self.vae.optimiser_vae.state_dict(), os.path.join(save_path, f"optimiser_vae{idx_label}.pt"))
                 torch.save(self.policy.optimiser.state_dict(), os.path.join(save_path, f"optimiser_pol{idx_label}.pt"))
@@ -596,8 +597,8 @@ class MetaLearnerML10VariBAD:
                 #    utl.save_obj(obs_rms, save_path, f"env_obs_rms{idx_label}")
 
         # --- log some other things ---
-        if train_stats is not None and self.iter_idx>0:
-        #if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
+        #if train_stats is not None and self.iter_idx>0:
+        if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)
             self.logger.add('environment/state_min', self.policy_storage.prev_state.min(), self.iter_idx)
@@ -626,7 +627,7 @@ class MetaLearnerML10VariBAD:
                 [self.vae.reward_decoder, 'reward_decoder'],
                 [self.vae.state_decoder, 'state_transition_decoder'],
                 [self.vae.task_decoder, 'task_decoder'],
-                [self.vae_pol.encoder, 'policy_encoder'] if self.args.policy_separate_gru else [None, None]
+                [self.encoder_pol.encoder, 'policy_encoder'] if self.args.policy_separate_gru else [None, None]
             ]:
                 if model is not None:
                     param_list = list(model.parameters())

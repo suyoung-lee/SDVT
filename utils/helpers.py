@@ -165,7 +165,7 @@ def update_encoding_pol(encoder, next_obs, action, reward, done, hidden_state):
     if done is not None:
         hidden_state = encoder.reset_hidden(hidden_state, done)
     with torch.no_grad():
-        latent_sample, latent_mean, latent_logvar, hidden_state = encoder(actions=action.float(),
+        latent_mean, hidden_state = encoder(actions=action.float(),
                                                                           states=next_obs,
                                                                           rewards=reward,
                                                                           hidden_state=hidden_state,
@@ -222,7 +222,7 @@ def recompute_embeddings(
             # reset hidden state of the GRU when we reset the task
             h = encoder.reset_hidden(h, policy_storage.done[i + 1])
 
-            ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
+            tm, h = encoder(policy_storage.actions.float()[i:i + 1],
                                     policy_storage.next_state[i:i + 1],
                                     policy_storage.rewards_raw[i:i + 1],
                                     h,
@@ -230,7 +230,6 @@ def recompute_embeddings(
                                     return_prior=False,
                                     detach_every=detach_every
                                     )
-
             latent_pol.append(tm)
 
         if update_idx == 0:

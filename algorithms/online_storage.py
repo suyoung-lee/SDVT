@@ -196,8 +196,8 @@ class OnlineStorage(object):
                 #print('self.latent_mean', self.latent_mean)
                 #print("online storage prob size {}, latent mean size {}: ".format(len(self.prob), len(self.latent_mean)))
         if self.policy_separate_gru:
-            self.latent_pol.append(latent_pol.clone())
-            self.hidden_states_pol[self.step + 1].copy_(hidden_states_pol)
+            self.latent_pol.append(latent_pol.detach().clone())
+            self.hidden_states_pol[self.step + 1].copy_(hidden_states_pol.detach())
 
 
         self.actions[self.step] = actions.detach().clone()
@@ -302,10 +302,9 @@ class OnlineStorage(object):
             latent_pol = torch.stack(self.latent_pol[:-1]) if self.latent_pol is not None else None
         else:
             latent_pol = None
-            
+
         #print('latent_mean size', torch.stack(self.latent_mean[:-1]).size())
         #print('prob size', prob.size())
-        #print('latent size', latent.size())
         _, action_log_probs, _ = policy.evaluate_actions(self.prev_state[:-1],
                                                          latent,
                                                          self.beliefs[:-1] if self.beliefs is not None else None,

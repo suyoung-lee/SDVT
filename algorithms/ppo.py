@@ -18,7 +18,7 @@ class PPO:
                  policy_anneal_lr,
                  train_steps,
                  optimiser_vae=None,
-                 optimiser_vae_pol=None,
+                 optimiser_encoder_pol=None,
                  lr=None,
                  clip_param=0.2,
                  ppo_epoch=5,
@@ -50,7 +50,7 @@ class PPO:
         elif policy_optimiser == 'rmsprop':
             self.optimiser = optim.RMSprop(actor_critic.parameters(), lr=lr, eps=eps, alpha=0.99)
         self.optimiser_vae = optimiser_vae
-        self.optimiser_vae_pol = optimiser_vae_pol
+        self.optimiser_encoder_pol = optimiser_encoder_pol
 
         self.lr_scheduler_policy = None
         self.lr_scheduler_encoder = None
@@ -61,7 +61,7 @@ class PPO:
             if hasattr(self.args, 'rlloss_through_encoder') and self.args.rlloss_through_encoder:
                 self.lr_scheduler_encoder = optim.lr_scheduler.LambdaLR(self.optimiser_vae, lr_lambda=lam)
             if hasattr(self.args, 'policy_separate_gru') and self.args.policy_separate_gru:
-                self.lr_scheduler_encoder_pol = optim.lr_scheduler.LambdaLR(self.optimiser_vae_pol, lr_lambda=lam)
+                self.lr_scheduler_encoder_pol = optim.lr_scheduler.LambdaLR(self.optimiser_encoder_pol, lr_lambda=lam)
 
     def update(self,
                policy_storage,
@@ -80,21 +80,23 @@ class PPO:
         # if this is true, we will update the VAE at every PPO update
         # otherwise, we update it after we update the policy
 
+        # update the normalisation parameters of policy inputs before updating
+        #the normalization should be detached, so it appears before recompute_embeddings
+        self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
+
         # TODO this does not work for variBAD rllloss through encoder, need to figure out why,
+
         if rlloss_through_encoder:
             # recompute embeddings (to build computation graph)
             utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=0,
-                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args,
-                                                                                      'tbptt_stepsize') else None,
+                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
                                      policy_separate_gru=False)
         if policy_separate_gru:
             utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=0,
-                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args,
-                                                                                      'tbptt_stepsize') else None,
+                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
                                      policy_separate_gru=True)
 
-        # update the normalisation parameters of policy inputs before updating
-        self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
+
 
         # call this to make sure that the action_log_probs are computed
         # (needs to be done right here because of some caching thing when normalising actions)
@@ -105,7 +107,7 @@ class PPO:
         dist_entropy_epoch = 0
         loss_epoch = 0
         for e in range(self.ppo_epoch):
-            #print('ppo epoch: ', e)
+            print('ppo epoch: ', e)
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
 
@@ -167,7 +169,7 @@ class PPO:
                 if rlloss_through_encoder:
                     self.optimiser_vae.zero_grad()
                 if policy_separate_gru:
-                    self.optimiser_vae_pol.zero_grad()
+                    self.optimiser_encoder_pol.zero_grad()
 
                 #time2
                 #time2 = time.time()
@@ -206,7 +208,7 @@ class PPO:
                 if rlloss_through_encoder:
                     self.optimiser_vae.step()
                 if policy_separate_gru:
-                    self.optimiser_vae_pol.step()
+                    self.optimiser_encoder_pol.step()
 
                 #time5
                 #time5 = time.time()

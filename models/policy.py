@@ -81,7 +81,7 @@ class Policy(nn.Module):
         self.pass_task_to_policy = pass_task_to_policy
         self.pass_belief_to_policy = pass_belief_to_policy
         self.policy_separate_gru = self.args.policy_separate_gru
-        self.dim_latent_pol  = dim_latent//2
+        self.dim_latent_pol  = self.args.encoder_gru_hidden_size
 
 
         # set normalisation parameters for the inputs
@@ -244,6 +244,7 @@ class Policy(nn.Module):
         """
         Returns the (raw) actions and their value.
         """
+
         value, actor_features = self.forward(state=state, latent=latent, belief=belief, task=task, prob=prob, latent_pol=latent_pol)
         dist = self.dist(actor_features)
         if deterministic:
