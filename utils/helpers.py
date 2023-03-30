@@ -93,11 +93,12 @@ def select_action(args,
                   belief=None,
                   task=None,
                   prob=None,
+                  latent_pol=None,
                   latent_sample=None, latent_mean=None, latent_logvar=None):
     """ Select action using the policy. """
     latent = get_latent_for_policy(args=args, latent_sample=latent_sample, latent_mean=latent_mean,
                                    latent_logvar=latent_logvar)
-    action = policy.act(state=state, latent=latent, belief=belief, task=task, prob=prob, deterministic=deterministic)
+    action = policy.act(state=state, latent=latent, belief=belief, task=task, prob=prob, latent_pol= latent_pol, deterministic=deterministic)
     if isinstance(action, list) or isinstance(action, tuple):
         value, action = action
     else:
@@ -158,6 +159,23 @@ def update_encoding(encoder, next_obs, action, reward, done, hidden_state, vae_m
         return latent_sample, latent_mean, latent_logvar, hidden_state
 
 
+def update_encoding_pol(encoder, next_obs, action, reward, done, hidden_state):
+    # print("helpers.py, update_encoding called")
+    # reset hidden state of the recurrent net when we reset the task
+    if done is not None:
+        hidden_state = encoder.reset_hidden(hidden_state, done)
+    with torch.no_grad():
+        latent_sample, latent_mean, latent_logvar, hidden_state = encoder(actions=action.float(),
+                                                                          states=next_obs,
+                                                                          rewards=reward,
+                                                                          hidden_state=hidden_state,
+                                                                          return_prior=False,
+                                                                          sample=False)
+
+    # TODO: move the sampling out of the encoder!
+
+        return latent_mean, hidden_state
+
 def seed(seed, deterministic_execution=False):
     print('Seeding random, torch, numpy.')
     random.seed(seed)
@@ -187,48 +205,22 @@ def recompute_embeddings(
         sample,
         update_idx,
         detach_every,
-        mixture=False
+        mixture=False,
+        policy_separate_gru = False
 ):
-    # get the prior
-    latent_sample = [policy_storage.latent_samples[0].detach().clone()]
-    latent_mean = [policy_storage.latent_mean[0].detach().clone()]
-    latent_logvar = [policy_storage.latent_logvar[0].detach().clone()]
-    if mixture:
-        prob = [policy_storage.prob[0].detach().clone()]
-        prob[0].requires_grad = True
+    if policy_separate_gru:
+        # get the prior
+        assert not mixture
+        latent_pol = [policy_storage.latent_pol[0].detach().clone()]
+        latent_pol[0].requires_grad = True
 
-    latent_sample[0].requires_grad = True
-    latent_mean[0].requires_grad = True
-    latent_logvar[0].requires_grad = True
+        # loop through experience and update hidden state
+        # (we need to loop because we sometimes need to reset the hidden state)
+        h = policy_storage.hidden_states_pol[0].detach()
 
-    # loop through experience and update hidden state
-    # (we need to loop because we sometimes need to reset the hidden state)
-    h = policy_storage.hidden_states[0].detach()
-    if mixture:
         for i in range(policy_storage.actions.shape[0]):
             # reset hidden state of the GRU when we reset the task
             h = encoder.reset_hidden(h, policy_storage.done[i + 1])
-
-            ts, tm, tl, h, ty, tz, tmu, tvar, tlogits, tprob = encoder(policy_storage.actions.float()[i:i + 1],
-                                                                       policy_storage.next_state[i:i + 1],
-                                                                       policy_storage.rewards_raw[i:i + 1],
-                                                                       h,
-                                                                       sample=sample,
-                                                                       return_prior=False,
-                                                                       detach_every=detach_every
-                                                                       )
-            # print("recompute embeddings, step: {}, latent_mean: {}".format(i, tm))
-            latent_sample.append(ts)
-            latent_mean.append(tm)
-            latent_logvar.append(tl)
-            prob.append(tprob)
-    else:
-        for i in range(policy_storage.actions.shape[0]):
-            # reset hidden state of the GRU when we reset the task
-
-
-            h = encoder.reset_hidden(h, policy_storage.done[i + 1])
-
 
             ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
                                     policy_storage.next_state[i:i + 1],
@@ -239,34 +231,95 @@ def recompute_embeddings(
                                     detach_every=detach_every
                                     )
 
+            latent_pol.append(tm)
 
-            # print(i, reset_task.sum())
-            # print(i, (policy_storage.latent_mean[i + 1] - tm).sum())
-            # print(i, (policy_storage.latent_logvar[i + 1] - tl).sum())
-            # print(i, (policy_storage.hidden_states[i + 1] - h).sum())
+        if update_idx == 0:
+            try:
+                assert (torch.cat(policy_storage.latent_pol) - torch.cat(latent_pol)).sum() == 0
+            except AssertionError:
+                warnings.warn('You are not recomputing the embeddings correctly!')
+                import pdb
+                pdb.set_trace()
 
-            latent_sample.append(ts)
-            latent_mean.append(tm)
-            latent_logvar.append(tl)
+        # print('3: ', policy_storage.latent_mean[1])
+        # print('4: ', latent_mean[1])
+        policy_storage.latent_pol = latent_pol  # use latent mean as the latent for policy gru encoder
 
+    else:
+        # get the prior
+        latent_sample = [policy_storage.latent_samples[0].detach().clone()]
+        latent_mean = [policy_storage.latent_mean[0].detach().clone()]
+        latent_logvar = [policy_storage.latent_logvar[0].detach().clone()]
+        if mixture:
+            prob = [policy_storage.prob[0].detach().clone()]
+            prob[0].requires_grad = True
 
-    if update_idx == 0:
-        try:
-            assert (torch.cat(policy_storage.latent_mean) - torch.cat(latent_mean)).sum() == 0
-            assert (torch.cat(policy_storage.latent_logvar) - torch.cat(latent_logvar)).sum() == 0
-        except AssertionError:
-            warnings.warn('You are not recomputing the embeddings correctly!')
-            import pdb
-            pdb.set_trace()
+        latent_sample[0].requires_grad = True
+        latent_mean[0].requires_grad = True
+        latent_logvar[0].requires_grad = True
 
-    # print('3: ', policy_storage.latent_mean[1])
-    # print('4: ', latent_mean[1])
+        # loop through experience and update hidden state
+        # (we need to loop because we sometimes need to reset the hidden state)
+        h = policy_storage.hidden_states[0].detach()
 
-    policy_storage.latent_samples = latent_sample
-    policy_storage.latent_mean = latent_mean
-    policy_storage.latent_logvar = latent_logvar
-    if mixture:
-        policy_storage.prob = prob
+        if mixture:
+            for i in range(policy_storage.actions.shape[0]):
+                # reset hidden state of the GRU when we reset the task
+                h = encoder.reset_hidden(h, policy_storage.done[i + 1])
+
+                ts, tm, tl, h, ty, tz, tmu, tvar, tlogits, tprob = encoder(policy_storage.actions.float()[i:i + 1],
+                                                                           policy_storage.next_state[i:i + 1],
+                                                                           policy_storage.rewards_raw[i:i + 1],
+                                                                           h,
+                                                                           sample=sample,
+                                                                           return_prior=False,
+                                                                           detach_every=detach_every
+                                                                           )
+                # print("recompute embeddings, step: {}, latent_mean: {}".format(i, tm))
+                latent_sample.append(ts)
+                latent_mean.append(tm)
+                latent_logvar.append(tl)
+                prob.append(tprob)
+        else:
+            for i in range(policy_storage.actions.shape[0]):
+                # reset hidden state of the GRU when we reset the task
+                h = encoder.reset_hidden(h, policy_storage.done[i + 1])
+
+                ts, tm, tl, h = encoder(policy_storage.actions.float()[i:i + 1],
+                                        policy_storage.next_state[i:i + 1],
+                                        policy_storage.rewards_raw[i:i + 1],
+                                        h,
+                                        sample=sample,
+                                        return_prior=False,
+                                        detach_every=detach_every
+                                        )
+
+                # print(i, reset_task.sum())
+                # print(i, (policy_storage.latent_mean[i + 1] - tm).sum())
+                # print(i, (policy_storage.latent_logvar[i + 1] - tl).sum())
+                # print(i, (policy_storage.hidden_states[i + 1] - h).sum())
+
+                latent_sample.append(ts)
+                latent_mean.append(tm)
+                latent_logvar.append(tl)
+
+        if update_idx == 0:
+            try:
+                assert (torch.cat(policy_storage.latent_mean) - torch.cat(latent_mean)).sum() == 0
+                assert (torch.cat(policy_storage.latent_logvar) - torch.cat(latent_logvar)).sum() == 0
+            except AssertionError:
+                warnings.warn('You are not recomputing the embeddings correctly!')
+                import pdb
+                pdb.set_trace()
+
+        # print('3: ', policy_storage.latent_mean[1])
+        # print('4: ', latent_mean[1])
+        policy_storage.latent_samples = latent_sample
+        policy_storage.latent_mean = latent_mean
+        policy_storage.latent_logvar = latent_logvar
+
+        if mixture:
+            policy_storage.prob = prob
 
 
 class FeatureExtractor(nn.Module):

@@ -14,7 +14,6 @@ def get_args(rest_args):
     parser.add_argument('--env_name', default='ML45Env-v2', help='environment to train on')
 
     # --- POLICY ---
-
     #using separate GRU
     parser.add_argument('--policy_separate_gru', type=boolean_argument, default=False, help='condition policy on state')
 

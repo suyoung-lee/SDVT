@@ -7,7 +7,7 @@ import torch
 
 from algorithms.a2c import A2C
 from algorithms.online_storage import OnlineStorage
-from algorithms.ppo import PPO, PPO_DISC
+from algorithms.ppo import PPO
 from environments.parallel_envs import make_vec_envs
 from models.policy import Policy
 from utils import evaluation as utl_eval
@@ -176,42 +176,23 @@ class MetaLearnerML45LDM:
                 eps=self.args.policy_eps,
             )
         elif self.args.policy == 'ppo':
-            if self.args.ppo_disc:
-                policy = PPO_DISC(
-                    self.args,
-                    policy_net,
-                    self.args.policy_value_loss_coef,
-                    self.args.policy_entropy_coef,
-                    policy_optimiser=self.args.policy_optimiser,
-                    policy_anneal_lr=self.args.policy_anneal_lr,
-                    train_steps=self.num_updates,
-                    lr=self.args.lr_policy,
-                    eps=self.args.policy_eps,
-                    ppo_epoch=self.args.ppo_num_epochs,
-                    num_mini_batch=self.args.ppo_num_minibatch,
-                    use_huber_loss=self.args.ppo_use_huberloss,
-                    use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
-                    clip_param=self.args.ppo_clip_param,
-                    optimiser_vae=self.vae.optimiser_vae,
-                )
-            else:
-                policy = PPO(
-                    self.args,
-                    policy_net,
-                    self.args.policy_value_loss_coef,
-                    self.args.policy_entropy_coef,
-                    policy_optimiser=self.args.policy_optimiser,
-                    policy_anneal_lr=self.args.policy_anneal_lr,
-                    train_steps=self.num_updates,
-                    lr=self.args.lr_policy,
-                    eps=self.args.policy_eps,
-                    ppo_epoch=self.args.ppo_num_epochs,
-                    num_mini_batch=self.args.ppo_num_minibatch,
-                    use_huber_loss=self.args.ppo_use_huberloss,
-                    use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
-                    clip_param=self.args.ppo_clip_param,
-                    optimiser_vae=self.vae.optimiser_vae,
-                )
+            policy = PPO(
+                self.args,
+                policy_net,
+                self.args.policy_value_loss_coef,
+                self.args.policy_entropy_coef,
+                policy_optimiser=self.args.policy_optimiser,
+                policy_anneal_lr=self.args.policy_anneal_lr,
+                train_steps=self.num_updates,
+                lr=self.args.lr_policy,
+                eps=self.args.policy_eps,
+                ppo_epoch=self.args.ppo_num_epochs,
+                num_mini_batch=self.args.ppo_num_minibatch,
+                use_huber_loss=self.args.ppo_use_huberloss,
+                use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
+                clip_param=self.args.ppo_clip_param,
+                optimiser_vae=self.vae.optimiser_vae,
+            )
         else:
             raise NotImplementedError
 

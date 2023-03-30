@@ -23,6 +23,7 @@ class OnlineStorage(object):
                  hidden_size, latent_dim, normalise_rewards):
 
         self.args = args
+        self.policy_separate_gru = self.args.policy_separate_gru
         self.state_dim = state_dim
         self.belief_dim = belief_dim
         self.task_dim = task_dim
@@ -57,6 +58,7 @@ class OnlineStorage(object):
             # hidden states of RNN (necessary if we want to re-compute embeddings)
             self.hidden_size = hidden_size
             self.hidden_states = torch.zeros(num_steps + 1, num_processes, hidden_size)
+
             # next_state will include s_N when state was reset, skipping s_0
             # (only used if we need to re-compute embeddings after backpropagating RL loss through encoder)
             self.next_state = torch.zeros(num_steps, num_processes, state_dim)
@@ -78,6 +80,9 @@ class OnlineStorage(object):
             self.tasks = torch.zeros(num_steps + 1, num_processes, task_dim)
         else:
             self.tasks = None
+        if self.policy_separate_gru:
+            self.latent_pol = []
+            self.hidden_states_pol = torch.zeros(num_steps + 1, num_processes, hidden_size)
 
         # rewards and end of episodes
         self.rewards_raw = torch.zeros(num_steps, num_processes, 1)
@@ -121,10 +126,11 @@ class OnlineStorage(object):
                 #self.var = [t.to(device) for t in self.var] ##
                 #self.logits = [t.to(device) for t in self.logits] ##
                 self.prob = [t.to(device) for t in self.prob] ##
-
             self.hidden_states = self.hidden_states.to(device)
             self.next_state = self.next_state.to(device)
-
+        if self.policy_separate_gru:
+            self.latent_pol = [t.to(device) for t in self.latent_pol]
+            self.hidden_states_pol = self.hidden_states_pol.to(device)
 
 
         if self.args.pass_belief_to_policy:
@@ -162,6 +168,8 @@ class OnlineStorage(object):
                #var=None,
                #logits=None,
                prob=None,
+               latent_pol=None,
+               hidden_states_pol=None
                ):
         #print('self.prob 1', self.prob)
         #print('self.latent_mean 1 ', self.latent_mean)
@@ -187,6 +195,10 @@ class OnlineStorage(object):
                 #print('self.prob', self.prob)
                 #print('self.latent_mean', self.latent_mean)
                 #print("online storage prob size {}, latent mean size {}: ".format(len(self.prob), len(self.latent_mean)))
+        if self.policy_separate_gru:
+            self.latent_pol.append(latent_pol.clone())
+            self.hidden_states_pol[self.step + 1].copy_(hidden_states_pol)
+
 
         self.actions[self.step] = actions.detach().clone()
         self.rewards_raw[self.step].copy_(rewards_raw)
@@ -219,6 +231,9 @@ class OnlineStorage(object):
                 #self.logits = []
                 #self.prob[0].copy_(self.prob[-1])
                 self.prob=[]
+        if self.policy_separate_gru:
+            self.latent_pol = []
+            self.hidden_states_pol[0].copy_(self.hidden_states_pol[-1])
 
         self.done[0].copy_(self.done[-1])
         self.masks[0].copy_(self.masks[-1])
@@ -277,32 +292,27 @@ class OnlineStorage(object):
                                                self.latent_mean[:-1]) if self.latent_mean is not None else None,
                                            latent_logvar=torch.stack(
                                                self.latent_logvar[:-1]) if self.latent_mean is not None else None)
-        if self.args.ppo_disc:
-            if self.prob is not None:
-                prob = torch.stack(self.prob[:-1])
-            else:
-                prob = None
-            _, action_log_probs, action_log_probs_dimwise, _ = policy.evaluate_actions(self.prev_state[:-1],
-                                                             latent,
-                                                             self.beliefs[:-1] if self.beliefs is not None else None,
-                                                             self.tasks[:-1] if self.tasks is not None else None,
-                                                             prob,
-                                                             self.actions)
-            self.action_log_probs_dimwise = action_log_probs_dimwise.detach() #[500, 10, 4]
+
+        if self.prob is not None:
+            prob = torch.stack(self.prob[:-1])
         else:
-            if self.prob is not None:
-                prob = torch.stack(self.prob[:-1])
-            else:
-                prob = None
-            #print('latent_mean size', torch.stack(self.latent_mean[:-1]).size())
-            #print('prob size', prob.size())
-            #print('latent size', latent.size())
-            _, action_log_probs, _ = policy.evaluate_actions(self.prev_state[:-1],
-                                                             latent,
-                                                             self.beliefs[:-1] if self.beliefs is not None else None,
-                                                             self.tasks[:-1] if self.tasks is not None else None,
-                                                             prob,
-                                                             self.actions)
+            prob = None
+
+        if self.policy_separate_gru:
+            latent_pol = torch.stack(self.latent_pol[:-1]) if self.latent_pol is not None else None
+        else:
+            latent_pol = None
+            
+        #print('latent_mean size', torch.stack(self.latent_mean[:-1]).size())
+        #print('prob size', prob.size())
+        #print('latent size', latent.size())
+        _, action_log_probs, _ = policy.evaluate_actions(self.prev_state[:-1],
+                                                         latent,
+                                                         self.beliefs[:-1] if self.beliefs is not None else None,
+                                                         self.tasks[:-1] if self.tasks is not None else None,
+                                                         prob,
+                                                         latent_pol,
+                                                         self.actions)
         self.action_log_probs = action_log_probs.detach() #[500, 10, 1]
 
     def feed_forward_generator(self,
@@ -348,6 +358,10 @@ class OnlineStorage(object):
                 task_batch = self.tasks[:-1].reshape(-1, *self.tasks.size()[2:])[indices]
             else:
                 task_batch = None
+            if self.policy_separate_gru:
+                latent_pol_batch = torch.cat(self.latent_pol[:-1])[indices]
+            else:
+                latent_pol_batch = None
 
             actions_batch = self.actions.reshape(-1, self.actions.size(-1))[indices]
 
@@ -363,15 +377,7 @@ class OnlineStorage(object):
             #print('latent sample batch:', latent_sample_batch)
             #print('prob batch:', prob_batch)
 
-            if self.args.ppo_disc:
-                last_dim = self.action_log_probs_dimwise.size()[-1]
-                old_action_log_probs_batch_dimwise = self.action_log_probs_dimwise.reshape(-1, last_dim)[indices]
-                yield state_batch, belief_batch, task_batch, prob_batch, \
-                      actions_batch, \
-                      latent_sample_batch, latent_mean_batch, latent_logvar_batch, \
-                      value_preds_batch, return_batch, old_action_log_probs_batch, old_action_log_probs_batch_dimwise, adv_targ
-            else:
-                yield state_batch, belief_batch, task_batch, prob_batch, \
-                      actions_batch, \
-                      latent_sample_batch, latent_mean_batch, latent_logvar_batch, \
-                      value_preds_batch, return_batch, old_action_log_probs_batch, adv_targ
+            yield state_batch, belief_batch, task_batch, prob_batch, latent_pol_batch,\
+                  actions_batch, \
+                  latent_sample_batch, latent_mean_batch, latent_logvar_batch, \
+                  value_preds_batch, return_batch, old_action_log_probs_batch, adv_targ

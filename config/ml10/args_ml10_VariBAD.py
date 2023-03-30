@@ -58,7 +58,6 @@ def get_args(rest_args):
     parser.add_argument('--ppo_use_huberloss', type=boolean_argument, default=True, help='use huberloss instead of MSE')
     parser.add_argument('--ppo_use_clipped_value_loss', type=boolean_argument, default=True, help='clip value loss')
     parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param')
-    parser.add_argument('--ppo_disc',  type=boolean_argument, default=False, help='dimension-wise clipping')
 
     # other hyperparameters
     parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)')
