@@ -237,7 +237,7 @@ class MetaLearnerML10VariBAD:
                 self.policy_storage.latent_pol.append(latent_pol.clone())
                 self.policy_storage.hidden_states_pol[0].copy_(hidden_state_pol)
 
-            print('iter: ', self.iter_idx, torch.mean(self.return_list))
+            #print('iter: ', self.iter_idx, torch.mean(self.return_list))
             self.return_list = torch.zeros((self.args.num_processes)).to(device)
 
             # rollout policies for a few steps
@@ -473,8 +473,8 @@ class MetaLearnerML10VariBAD:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-        if 0:
-        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        #if 0:
+        if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
@@ -633,10 +633,10 @@ class MetaLearnerML10VariBAD:
                     param_list = list(model.parameters())
                     param_mean = np.mean([param_list[i].data.cpu().numpy().mean() for i in range(len(param_list))])
 
-                    print('name', name)
-                    print('model', model)
-                    for i in range(len(param_list)):
-                        print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
+                    #print('name', name)
+                    #print('model', model)
+                    #for i in range(len(param_list)):
+                    #    print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
 
                     self.logger.add('weights/{}'.format(name), param_mean, self.iter_idx)
                     if name == 'policy':

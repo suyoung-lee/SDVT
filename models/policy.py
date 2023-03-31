@@ -257,7 +257,7 @@ class Policy(nn.Module):
 
         return value, action
 
-    def get_value(self, state, latent, belief, task, prob, latent_pol):
+    def get_value(self, state, latent, belief, task, prob, latent_pol=None):
         value, _ = self.forward(state, latent, belief, task, prob, latent_pol)
         return value
 

@@ -107,7 +107,7 @@ class PPO:
         dist_entropy_epoch = 0
         loss_epoch = 0
         for e in range(self.ppo_epoch):
-            print('ppo epoch: ', e)
+            #print('ppo epoch: ', e)
             data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
             for sample in data_generator:
 

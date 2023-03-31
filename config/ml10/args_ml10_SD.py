@@ -83,7 +83,7 @@ def get_args(rest_args):
     parser.add_argument('--decoder_max_grad_norm', type=float, default=1.0, help='max norm of gradients')
 
     # --- VAE TRAINING ---
-    parser.add_argument('--dropout_rate', type=float, default=0.0, help='dropout rate for non-latent input of decoder')
+    parser.add_argument('--dropout_rate', type=float, default=0.7, help='dropout rate for non-latent input of decoder')
     # general
     parser.add_argument('--lr_vae', type=float, default=0.001)
     parser.add_argument('--size_vae_buffer', type=int, default=1000,
@@ -119,7 +119,7 @@ def get_args(rest_args):
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')
-    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
+    parser.add_argument('--cat_loss_coeff', type=float, default=0.5,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')

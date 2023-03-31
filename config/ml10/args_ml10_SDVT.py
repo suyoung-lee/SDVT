@@ -8,7 +8,7 @@ def get_args(rest_args):
     # --- GENERAL ---
 
     # training parameters
-    parser.add_argument('--num_frames', type=int, default=25e7, help='number of frames to train')
+    parser.add_argument('--num_frames', type=int, default=35e7, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
     parser.add_argument('--exp_label', default='SDVT', help='label (typically name of method)')
     parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
@@ -119,7 +119,7 @@ def get_args(rest_args):
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')
-    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
+    parser.add_argument('--cat_loss_coeff', type=float, default=0.5,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')
