@@ -242,7 +242,7 @@ class RNNEncoder_keepdim(nn.Module):
 
         # output layer
 
-        self.fc_mu = nn.Linear(curr_input_dim, self.hidden_size) #this case latent_dim = hidden_size
+        self.fc_pol = nn.Linear(curr_input_dim, self.hidden_size) #this case latent_dim = hidden_size
 
 
     def reset_hidden(self, hidden_state, done):
@@ -268,9 +268,9 @@ class RNNEncoder_keepdim(nn.Module):
             h = F.relu(self.fc_after_gru[i](h))
 
         # outputs
-        latent_mean = self.fc_mu(h)
+        latent_pol = self.fc_pol(h)
 
-        return latent_mean, hidden_state
+        return latent_pol, hidden_state
 
     def forward(self, actions, states, rewards, hidden_state, return_prior, sample=False, detach_every=None):
         """
@@ -325,13 +325,13 @@ class RNNEncoder_keepdim(nn.Module):
             gru_h = F.relu(self.fc_after_gru[i](gru_h))
 
         # outputs
-        latent_mean = self.fc_mu(gru_h)
+        latent_pol = self.fc_pol(gru_h)
 
         if return_prior:
-            latent_mean = torch.cat((prior_mean, latent_mean))
+            latent_pol = torch.cat((prior_mean, latent_pol))
             output = torch.cat((prior_hidden_state, output))
 
-        if latent_mean.shape[0] == 1:
-            latent_mean = latent_mean[0]
+        if latent_pol.shape[0] == 1:
+            latent_pol = latent_pol[0]
 
-        return latent_mean, output
+        return latent_pol, output

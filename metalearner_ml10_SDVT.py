@@ -5,7 +5,6 @@ import gym
 import numpy as np
 import torch
 
-from algorithms.a2c import A2C
 from algorithms.online_storage import OnlineStorage
 from algorithms.ppo import PPO
 from environments.parallel_envs import make_vec_envs
@@ -179,20 +178,7 @@ class MetaLearnerML10SDVT:
         ).to(device)
 
         # initialise policy trainer
-        if self.args.policy == 'a2c':
-            policy = A2C(
-                self.args,
-                policy_net,
-                self.args.policy_value_loss_coef,
-                self.args.policy_entropy_coef,
-                policy_optimiser=self.args.policy_optimiser,
-                policy_anneal_lr=self.args.policy_anneal_lr,
-                train_steps=self.num_updates,
-                optimiser_vae=self.vae.optimiser_vae,
-                lr=self.args.lr_policy,
-                eps=self.args.policy_eps,
-            )
-        elif self.args.policy == 'ppo':
+        if self.args.policy == 'ppo':
             policy = PPO(
                 self.args,
                 policy_net,

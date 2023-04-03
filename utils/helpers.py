@@ -98,6 +98,8 @@ def select_action(args,
     """ Select action using the policy. """
     latent = get_latent_for_policy(args=args, latent_sample=latent_sample, latent_mean=latent_mean,
                                    latent_logvar=latent_logvar)
+    if latent_pol is not None and latent_pol.shape[0] == 1:
+        latent_pol = latent_pol[0]
     action = policy.act(state=state, latent=latent, belief=belief, task=task, prob=prob, latent_pol= latent_pol, deterministic=deterministic)
     if isinstance(action, list) or isinstance(action, tuple):
         value, action = action

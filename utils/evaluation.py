@@ -120,9 +120,11 @@ def evaluate_metaworld(args,
              iter_idx,
              tasks,
              encoder=None,
+             encoder_pol=None,
              num_episodes=None,
              test = False, task_list = None, save_episode_probs=False, save_episode_successes=False):
     env_name = args.env_name
+    policy_separate_gru = args.policy_separate_gru
     if test:
         env_name = args.test_env_name
     if num_episodes is None:
@@ -152,6 +154,7 @@ def evaluate_metaworld(args,
                          )
     num_steps = envs._max_episode_steps
 
+
     # reset environments
     state, belief, task = utl.reset_env(envs, args)
     envs.reset_task(task_list)
@@ -177,12 +180,15 @@ def evaluate_metaworld(args,
             prob = prior_prob
             if save_episode_probs:
                 episode_probs = torch.zeros((num_processes, num_episodes + 1, num_steps, args.vae_mixture_num)).to(device)
-
         else:
             latent_sample, latent_mean, latent_logvar, hidden_state = encoder.prior(num_processes)
-
     else:
         latent_sample = latent_mean = latent_logvar = hidden_state = None
+
+    if policy_separate_gru:
+        latent_pol, hidden_state_pol = encoder_pol.prior(num_processes)
+    else:
+        latent_pol = hidden_state_pol = None
 
     meta_successes = np.zeros(num_processes)
     for episode_idx in range(num_episodes):
@@ -206,6 +212,7 @@ def evaluate_metaworld(args,
                                               belief=belief,
                                               task=task,
                                               prob=prob,
+                                              latent_pol=latent_pol if policy_separate_gru else None,
                                               latent_sample=latent_sample,
                                               latent_mean=latent_mean,
                                               latent_logvar=latent_logvar,
@@ -226,27 +233,38 @@ def evaluate_metaworld(args,
                     imgs[i,0:30,0:30,:] = int(255*success_list[i]) #to distinguish success
                 imgs_array.append(imgs)
 
-            if encoder is not None:
-                # update the hidden state
-                if args.vae_mixture_num>1:
-                    latent_sample, latent_mean, latent_logvar, hidden_state,\
-                    y, z, mu, var, logits, prob = utl.update_encoding(encoder=encoder,
-                                                                                                  next_obs=state,
-                                                                                                  action=action,
-                                                                                                  reward=rew_raw,
-                                                                                                  done=None,
-                                                                                                  hidden_state=hidden_state,
-                                                                      vae_mixture_num=args.vae_mixture_num)
-                    if save_episode_probs:
-                        episode_probs[:, episode_idx, step_idx , :] = prob.clone()
+            with torch.no_grad():
+                if encoder is not None:
+                    # update the hidden state
+                    if args.vae_mixture_num>1:
+                        latent_sample, latent_mean, latent_logvar, hidden_state,\
+                        y, z, mu, var, logits, prob = utl.update_encoding(encoder=encoder,
+                                                                                                      next_obs=state,
+                                                                                                      action=action,
+                                                                                                      reward=rew_raw,
+                                                                                                      done=None,
+                                                                                                      hidden_state=hidden_state,
+                                                                          vae_mixture_num=args.vae_mixture_num)
+                        if save_episode_probs:
+                            episode_probs[:, episode_idx, step_idx , :] = prob.clone()
 
-                else:
-                    latent_sample, latent_mean, latent_logvar, hidden_state = utl.update_encoding(encoder=encoder,
-                                                                                                  next_obs=state,
-                                                                                                  action=action,
-                                                                                                  reward=rew_raw,
-                                                                                                  done=None,
-                                                                                                  hidden_state=hidden_state)
+                    else:
+                        latent_sample, latent_mean, latent_logvar, hidden_state = utl.update_encoding(encoder=encoder,
+                                                                                                      next_obs=state,
+                                                                                                      action=action,
+                                                                                                      reward=rew_raw,
+                                                                                                      done=None,
+                                                                                                      hidden_state=hidden_state)
+
+                    if policy_separate_gru:
+                        latent_pol, hidden_state_pol = utl.update_encoding_pol(
+                            encoder=encoder_pol,
+                            next_obs=state,
+                            action=action,
+                            reward=rew_raw,
+                            done=None,
+                            hidden_state=hidden_state_pol,
+                        )
 
             # add rewards
             returns_per_episode[range(num_processes), task_count] += rew_raw.view(-1)

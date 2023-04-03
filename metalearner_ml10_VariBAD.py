@@ -5,7 +5,6 @@ import gym
 import numpy as np
 import torch
 
-from algorithms.a2c import A2C
 from algorithms.online_storage import OnlineStorage
 from algorithms.ppo import PPO
 from environments.parallel_envs import make_vec_envs
@@ -51,11 +50,11 @@ class MetaLearnerML10VariBAD:
         # initialise tensorboard logger
         self.logger = TBLogger(self.args, self.args.exp_label)
 
-        header = ['iter', 'frames', 'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14',
-                  'S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14',
-                  'SF0', 'SF1', 'SF2', 'SF3', 'SF4', 'SF5', 'SF6', 'SF7', 'SF8', 'SF9', 'SF10', 'SF11', 'SF12', 'SF13', 'SF14',
-                  'RF0', 'RF1', 'RF2', 'RF3', 'RF4', 'RF5', 'RF6', 'RF7', 'RF8', 'RF9', 'RF10', 'RF11', 'RF12', 'RF13', 'RF14',
-                  ]
+        header = ['iter', 'frames']
+        for record_type in ['R', 'S', 'SF', 'RF']:
+            for task_num in range(15):
+                header += [record_type + str(task_num)]
+
         with open(self.logger.full_output_folder + '/log_eval.csv', 'w', encoding='UTF8') as f:
             writer = csv.writer(f)
             writer.writerow(header)
@@ -96,8 +95,6 @@ class MetaLearnerML10VariBAD:
             self.encoder_pol = None
 
         self.policy_storage = self.initialise_policy_storage()
-        self.policy_storage_pol = self.initialise_policy_storage()
-
         self.policy = self.initialise_policy()
 
         if self.args.load_dir is not None:
@@ -167,20 +164,7 @@ class MetaLearnerML10VariBAD:
         ).to(device)
 
         # initialise policy trainer
-        if self.args.policy == 'a2c':
-            policy = A2C(
-                self.args,
-                policy_net,
-                self.args.policy_value_loss_coef,
-                self.args.policy_entropy_coef,
-                policy_optimiser=self.args.policy_optimiser,
-                policy_anneal_lr=self.args.policy_anneal_lr,
-                train_steps=self.num_updates,
-                optimiser_vae=self.vae.optimiser_vae,
-                lr=self.args.lr_policy,
-                eps=self.args.policy_eps,
-            )
-        elif self.args.policy == 'ppo':
+        if self.args.policy == 'ppo':
             policy = PPO(
                 self.args,
                 policy_net,
@@ -260,8 +244,7 @@ class MetaLearnerML10VariBAD:
                     )
 
                 # take step in the environment
-                [next_state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(self.envs, action,
-                                                                                                  self.args)
+                [next_state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(self.envs, action, self.args)
 
                 self.return_list = self.return_list + rew_raw.flatten()
                 done = torch.from_numpy(np.array(done, dtype=int)).to(device).float().view((-1, 1))
@@ -506,6 +489,7 @@ class MetaLearnerML10VariBAD:
                         policy=self.policy,
                         ret_rms=ret_rms,
                         encoder=self.vae.encoder,
+                        encoder_pol = self.encoder_pol.encoder if self.args.policy_separate_gru else None,
                         iter_idx=self.iter_idx,
                         tasks=None,
                         test=False,

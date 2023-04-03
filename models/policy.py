@@ -244,7 +244,6 @@ class Policy(nn.Module):
         """
         Returns the (raw) actions and their value.
         """
-
         value, actor_features = self.forward(state=state, latent=latent, belief=belief, task=task, prob=prob, latent_pol=latent_pol)
         dist = self.dist(actor_features)
         if deterministic:
