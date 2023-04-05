@@ -11,7 +11,7 @@ def get_args(rest_args):
     parser.add_argument('--num_frames', type=int, default=25e7, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
     parser.add_argument('--exp_label', default='SD', help='label (typically name of method)')
-    parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
+    parser.add_argument('--env_name', default='ML45Env-v2', help='environment to train on')
 
     # --- POLICY ---
 
@@ -209,6 +209,8 @@ def get_args(rest_args):
     parser.add_argument('--results_log_dir', default=None, help='directory to save results (None uses ./logs)')
     parser.add_argument('--render', type=boolean_argument, default=False,
                         help='render during eval')
+    parser.add_argument('--parametric_num', type=int, default=10, help='number of parametric variations for evaluation')
+
     # general settings
     parser.add_argument('--seed',  nargs='+', type=int, default=[20])
     parser.add_argument('--deterministic_execution', type=boolean_argument, default=False,

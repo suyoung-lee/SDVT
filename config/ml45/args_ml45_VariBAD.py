@@ -208,6 +208,8 @@ def get_args(rest_args):
     parser.add_argument('--results_log_dir', default=None, help='directory to save results (None uses ./logs)')
     parser.add_argument('--render', type=boolean_argument, default=False,
                         help='render during eval')
+    parser.add_argument('--parametric_num', type=int, default=10, help='number of parametric variations for evaluation')
+
     # general settings
     parser.add_argument('--seed',  nargs='+', type=int, default=[20])
     parser.add_argument('--deterministic_execution', type=boolean_argument, default=False,
