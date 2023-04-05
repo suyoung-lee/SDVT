@@ -15,6 +15,7 @@ from utils.tb_logger import TBLogger
 from vae import VaribadVAE
 from vae_mixture import VaribadVAEMixture
 from vae_mixture_ext import VaribadVAEMixtureExt
+from models.policy_encoder import PolicyEncoder
 import torch.nn.functional as F
 
 import metaworld

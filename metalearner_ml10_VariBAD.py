@@ -103,6 +103,10 @@ class MetaLearnerML10VariBAD:
             self.policy.actor_critic.train()
             self.vae.encoder = torch.load(self.args.load_dir + '/models/encoder{}.pt'.format(self.args.load_iter))
             self.vae.encoder.train()
+            if self.encoder_pol is not None:
+                self.encoder_pol = torch.load(self.args.load_dir + '/models/encoder_pol{}.pt'.format(self.args.load_iter))
+                self.encoder_pol.train()
+                self.encoder_pol.optimiser_vae.load_state_dict(torch.load(self.args.load_dir + '/models/encoder_pol_optimiser_pol{}.pt'.format(self.args.load_iter)))
             if self.vae.state_decoder is not None:
                 self.vae.state_decoder = torch.load(self.args.load_dir + '/models/state_decoder{}.pt'.format(self.args.load_iter))
                 self.vae.state_decoder.train()
@@ -557,6 +561,7 @@ class MetaLearnerML10VariBAD:
 
                 torch.save(self.policy.actor_critic, os.path.join(save_path, f"policy{idx_label}.pt"))
                 torch.save(self.vae.encoder, os.path.join(save_path, f"encoder{idx_label}.pt"))
+
                 if self.vae.state_decoder is not None:
                     torch.save(self.vae.state_decoder, os.path.join(save_path, f"state_decoder{idx_label}.pt"))
                 if self.vae.reward_decoder is not None:
@@ -564,10 +569,11 @@ class MetaLearnerML10VariBAD:
                 if self.vae.task_decoder is not None:
                     torch.save(self.vae.task_decoder, os.path.join(save_path, f"task_decoder{idx_label}.pt"))
                 if self.args.policy_separate_gru:
-                    torch.save(self.encoder_pol.encoder, os.path.join(save_path, f"policy_encoder{idx_label}.pt"))
-
+                    torch.save(self.encoder_pol.encoder, os.path.join(save_path, f"encoder_pol{idx_label}.pt"))
+                    torch.save(self.encoder_pol.optimiser_vae.state_dict(), os.path.join(save_path, f"encoder_pol_optimiser_pol{idx_label}.pt"))
                 torch.save(self.vae.optimiser_vae.state_dict(), os.path.join(save_path, f"optimiser_vae{idx_label}.pt"))
                 torch.save(self.policy.optimiser.state_dict(), os.path.join(save_path, f"optimiser_pol{idx_label}.pt"))
+
                 # save normalisation params of envs
                 if self.args.norm_rew_for_policy:
                     rew_rms = self.envs.venv.ret_rms

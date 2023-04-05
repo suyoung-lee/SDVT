@@ -242,8 +242,6 @@ def recompute_embeddings(
                 import pdb
                 pdb.set_trace()
 
-        # print('3: ', policy_storage.latent_mean[1])
-        # print('4: ', latent_mean[1])
         policy_storage.latent_pol = latent_pol  # use latent mean as the latent for policy gru encoder
 
     else:
@@ -267,7 +265,7 @@ def recompute_embeddings(
             for i in range(policy_storage.actions.shape[0]):
                 # reset hidden state of the GRU when we reset the task
                 h = encoder.reset_hidden(h, policy_storage.done[i + 1])
-
+                #z, mu, torch.log(var + 1e-20), output, y, z, mu, var, logits, prob
                 ts, tm, tl, h, ty, tz, tmu, tvar, tlogits, tprob = encoder(policy_storage.actions.float()[i:i + 1],
                                                                            policy_storage.next_state[i:i + 1],
                                                                            policy_storage.rewards_raw[i:i + 1],
@@ -276,7 +274,7 @@ def recompute_embeddings(
                                                                            return_prior=False,
                                                                            detach_every=detach_every
                                                                            )
-                # print("recompute embeddings, step: {}, latent_mean: {}".format(i, tm))
+                #print("recompute embeddings, step: {}, prob: {}".format(i, tprob))
                 latent_sample.append(ts)
                 latent_mean.append(tm)
                 latent_logvar.append(tl)
@@ -305,13 +303,21 @@ def recompute_embeddings(
                 latent_logvar.append(tl)
 
         if update_idx == 0:
-            try:
-                assert (torch.cat(policy_storage.latent_mean) - torch.cat(latent_mean)).sum() == 0
-                assert (torch.cat(policy_storage.latent_logvar) - torch.cat(latent_logvar)).sum() == 0
-            except AssertionError:
-                warnings.warn('You are not recomputing the embeddings correctly!')
-                import pdb
-                pdb.set_trace()
+            if mixture:
+                try:
+                    assert ((torch.cat(policy_storage.prob) - torch.cat(prob))**2).sum() == 0
+                except AssertionError:
+                    warnings.warn('You are not recomputing the embeddings correctly!')
+                    import pdb
+                    pdb.set_trace()
+            else:
+                try:
+                    assert (torch.cat(policy_storage.latent_mean) - torch.cat(latent_mean)).sum() == 0
+                    assert (torch.cat(policy_storage.latent_logvar) - torch.cat(latent_logvar)).sum() == 0
+                except AssertionError:
+                    warnings.warn('You are not recomputing the embeddings correctly!')
+                    import pdb
+                    pdb.set_trace()
 
         # print('3: ', policy_storage.latent_mean[1])
         # print('4: ', latent_mean[1])

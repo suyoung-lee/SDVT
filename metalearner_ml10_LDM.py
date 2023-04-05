@@ -15,6 +15,7 @@ from utils.tb_logger import TBLogger
 from vae import VaribadVAE
 from vae_mixture import VaribadVAEMixture
 from vae_mixture_ext import VaribadVAEMixtureExt
+from models.policy_encoder import PolicyEncoder
 import torch.nn.functional as F
 
 import metaworld
@@ -92,6 +93,12 @@ class MetaLearnerML10LDM:
 
         # initialise VAE and policy
         self.vae = VaribadVAE(self.args, self.logger, lambda: self.iter_idx)
+
+        if self.args.policy_separate_gru:
+            self.encoder_pol= PolicyEncoder(self.args, self.logger, lambda: self.iter_idx)
+        else:
+            self.encoder_pol = None
+
         self.policy_storage = self.initialise_policy_storage()
         self.policy = self.initialise_policy()
 
@@ -101,6 +108,10 @@ class MetaLearnerML10LDM:
             self.policy.actor_critic.train()
             self.vae.encoder = torch.load(self.args.load_dir+'/models/encoder{}.pt'.format(self.args.load_iter))
             self.vae.encoder.train()
+            if self.encoder_pol is not None:
+                self.encoder_pol = torch.load(self.args.load_dir + '/models/encoder_pol{}.pt'.format(self.args.load_iter))
+                self.encoder_pol.train()
+                self.encoder_pol.optimiser_vae.load_state_dict(torch.load(self.args.load_dir + '/models/encoder_pol_optimiser_pol{}.pt'.format(self.args.load_iter)))
             if self.vae.state_decoder is not None:
                 self.vae.state_decoder = torch.load(self.args.load_dir+'/models/state_decoder{}.pt'.format(self.args.load_iter))
                 self.vae.state_decoder.train()
@@ -178,6 +189,7 @@ class MetaLearnerML10LDM:
                 use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
+                optimiser_encoder_pol=self.encoder_pol.optimiser_vae if self.encoder_pol is not None else None,
             )
         else:
             raise NotImplementedError
@@ -227,12 +239,17 @@ class MetaLearnerML10LDM:
                 latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory(virtual)
                 y=prob=None
 
+                if self.args.policy_separate_gru:
+                    latent_pol, hidden_state_pol = self.encode_running_trajectory_pol(encoder = self.encoder_pol.encoder)
             # add this initial hidden state to the policy storage
             assert len(self.policy_storage.latent_mean) == 0  # make sure we emptied buffers
             self.policy_storage.hidden_states[0].copy_(hidden_state)
             self.policy_storage.latent_samples.append(latent_sample.clone())
             self.policy_storage.latent_mean.append(latent_mean.clone())
             self.policy_storage.latent_logvar.append(latent_logvar.clone())
+            if self.args.policy_separate_gru:
+                self.policy_storage.latent_pol.append(latent_pol.clone())
+                self.policy_storage.hidden_states_pol[0].copy_(hidden_state_pol)
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
@@ -246,6 +263,7 @@ class MetaLearnerML10LDM:
                         belief=belief,
                         task=task,
                         prob=prob,
+                        latent_pol = latent_pol if self.args.policy_separate_gru else None,
                         deterministic=False,
                         latent_sample=latent_sample,
                         latent_mean=latent_mean,
@@ -278,6 +296,16 @@ class MetaLearnerML10LDM:
                         done=done,
                         hidden_state=hidden_state,
                         vae_mixture_num=self.args.vae_mixture_num)
+
+                    if self.args.policy_separate_gru:
+                        latent_pol, hidden_state_pol = utl.update_encoding_pol(
+                            encoder=self.encoder_pol.encoder,
+                            next_obs=next_state,
+                            action=action,
+                            reward=rew_raw,
+                            done=done,
+                            hidden_state=hidden_state_pol,
+                        )
 
                 # before resetting, update the embedding and add to vae buffer
                 # (last state might include useful task info)
@@ -330,6 +358,8 @@ class MetaLearnerML10LDM:
                     latent_logvar=latent_logvar,
                     y=y,
                     prob=prob,
+                    latent_pol=latent_pol if self.args.policy_separate_gru else None,
+                    hidden_states_pol=hidden_state_pol.squeeze(0) if self.args.policy_separate_gru else None
                 )
                 prev_state = next_state
 
@@ -351,6 +381,7 @@ class MetaLearnerML10LDM:
                                               belief=belief,
                                               task=task,
                                               prob=prob,
+                                              latent_pol=latent_pol if self.args.policy_separate_gru else None,
                                               latent_sample=latent_sample,
                                               latent_mean=latent_mean,
                                               latent_logvar=latent_logvar)
@@ -395,11 +426,28 @@ class MetaLearnerML10LDM:
 
         return latent_sample, latent_mean, latent_logvar, hidden_state
 
-    def get_value(self, state, belief, task, prob, latent_sample, latent_mean, latent_logvar):
-        latent = utl.get_latent_for_policy(self.args, latent_sample=latent_sample, latent_mean=latent_mean, latent_logvar=latent_logvar)
-        return self.policy.actor_critic.get_value(state=state, belief=belief, task=task, latent=latent, prob=prob).detach()
+    def encode_running_trajectory_pol(self, encoder):
+        # for each process, get the current batch (zero-padded obs/act/rew + length indicators)
+        prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
 
-    def update(self, state, belief, task,prob, latent_sample, latent_mean, latent_logvar):
+        # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
+        all_latent_means, all_hidden_states = encoder(actions=act,
+                                                                                                       states=next_obs,
+                                                                                                       rewards=rew,
+                                                                                                       hidden_state=None,
+                                                                                                       return_prior=True,
+                                                                                              sample=False)
+
+        # get the embedding / hidden state of the current time step (need to do this since we zero-padded)
+        latent_mean = (torch.stack([all_latent_means[lens[i]][i] for i in range(len(lens))])).to(device)
+        hidden_state = (torch.stack([all_hidden_states[lens[i]][i] for i in range(len(lens))])).to(device)
+        return latent_mean, hidden_state
+
+    def get_value(self, state, belief, task, prob, latent_pol, latent_sample, latent_mean, latent_logvar):
+        latent = utl.get_latent_for_policy(self.args, latent_sample=latent_sample, latent_mean=latent_mean, latent_logvar=latent_logvar)
+        return self.policy.actor_critic.get_value(state=state, belief=belief, task=task, latent=latent, prob=prob, latent_pol=latent_pol).detach()
+
+    def update(self, state, belief, task, prob, latent_pol, latent_sample, latent_mean, latent_logvar):
         """
         Meta-update.
         Here the policy is updated for good average performance across tasks.
@@ -414,6 +462,7 @@ class MetaLearnerML10LDM:
                                             belief=belief,
                                             task=task,
                                             prob=prob,
+                                            latent_pol = latent_pol,
                                             latent_sample=latent_sample,
                                             latent_mean=latent_mean,
                                             latent_logvar=latent_logvar)

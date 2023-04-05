@@ -13,6 +13,7 @@ from utils import evaluation as utl_eval
 from utils import helpers as utl
 from utils.tb_logger import TBLogger
 from vae import VaribadVAE
+from models.policy_encoder import PolicyEncoder
 import torch.nn.functional as F
 
 import metaworld

@@ -85,18 +85,16 @@ class PPO:
         self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
 
         # TODO this does not work for variBAD rllloss through encoder, need to figure out why,
-
+        print('==0')
         if rlloss_through_encoder:
             # recompute embeddings (to build computation graph)
             utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=0,
-                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
+                                     detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
                                      policy_separate_gru=False)
-        if policy_separate_gru:
+        elif policy_separate_gru:
             utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=0,
                                      detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
                                      policy_separate_gru=True)
-
-
 
         # call this to make sure that the action_log_probs are computed
         # (needs to be done right here because of some caching thing when normalising actions)
@@ -219,13 +217,16 @@ class PPO:
                 dist_entropy_epoch += dist_entropy.item()
                 loss_epoch += loss.item()
 
+                print('==1')
                 if rlloss_through_encoder:
                     # recompute embeddings (to build computation graph)
                     utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
-                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, policy_separate_gru = False)
-                if policy_separate_gru:
+                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
+                                             policy_separate_gru = False)
+                elif policy_separate_gru:
                     utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=e + 1,
-                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, policy_separate_gru = True)
+                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
+                                             policy_separate_gru = True)
                 #time6
                 #time6 = time.time()
                 #print("ppo.py recompute_embeddings time", time6-time5)

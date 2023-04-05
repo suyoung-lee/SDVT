@@ -275,6 +275,8 @@ class Policy(nn.Module):
             self.belief_rms.update(policy_storage.beliefs[:-1])
         if self.pass_task_to_policy and self.norm_task:
             self.task_rms.update(policy_storage.tasks[:-1])
+        if self.pass_prob_to_policy and self.norm_prob:
+            self.prob_rms.update(torch.cat(policy_storage.prob[:-1]))
         if self.policy_separate_gru and self.norm_latent:
             self.latent_pol_rms.update(torch.cat(policy_storage.latent_pol[:-1]))
 

@@ -15,6 +15,7 @@ from utils.tb_logger import TBLogger
 from vae import VaribadVAE
 from vae_mixture import VaribadVAEMixture
 from vae_mixture_ext import VaribadVAEMixtureExt
+from models.policy_encoder import PolicyEncoder
 import torch.nn.functional as F
 
 import metaworld
@@ -32,8 +33,7 @@ class MetaLearnerML10SDVT:
     def __init__(self, args):
 
         self.args = args
-        if self.args.vae_mixture_num<2:
-            self.args.pass_prob_to_policy = False
+        assert self.args.vae_mixture_num>1
         self.virtual_ratio = self.args.virtual_ratio
         utl.seed(self.args.seed, self.args.deterministic_execution)
 
@@ -94,13 +94,16 @@ class MetaLearnerML10SDVT:
             self.args.action_dim = self.envs.action_space.shape[0]
 
         # initialise VAE and policy
-        if self.args.vae_mixture_num > 1:
-            if self.args.vae_extrapolate:
-                self.vae = VaribadVAEMixtureExt(self.args, self.logger, lambda: self.iter_idx)
-            else:
-                self.vae = VaribadVAEMixture(self.args, self.logger, lambda: self.iter_idx)
+        if self.args.vae_extrapolate:
+            self.vae = VaribadVAEMixtureExt(self.args, self.logger, lambda: self.iter_idx)
         else:
-            self.vae = VaribadVAE(self.args, self.logger, lambda: self.iter_idx)
+            self.vae = VaribadVAEMixture(self.args, self.logger, lambda: self.iter_idx)
+
+        if self.args.policy_separate_gru:
+            self.encoder_pol= PolicyEncoder(self.args, self.logger, lambda: self.iter_idx)
+        else:
+            self.encoder_pol = None
+
         self.policy_storage = self.initialise_policy_storage()
         self.policy = self.initialise_policy()
         #self.policy_resample = PolicyResample(self.args, self.args.vae_mixture_num).to(device)
@@ -115,6 +118,11 @@ class MetaLearnerML10SDVT:
             self.vae.encoder.load_state_dict(torch.load(self.args.load_dir+'/models/encoder{}.pt'.format(self.args.load_iter)).state_dict())
             self.vae.encoder.train()
             print('vae.encoder loaded')
+            if self.encoder_pol is not None:
+                self.encoder_pol = torch.load(self.args.load_dir + '/models/encoder_pol{}.pt'.format(self.args.load_iter))
+                self.encoder_pol.train()
+                self.encoder_pol.optimiser_vae.load_state_dict(torch.load(self.args.load_dir + '/models/encoder_pol_optimiser_pol{}.pt'.format(self.args.load_iter)))
+                print('encoder_pol loaded')
             if self.vae.state_decoder is not None:
                 self.vae.state_decoder.load_state_dict(torch.load(self.args.load_dir+'/models/state_decoder{}.pt'.format(self.args.load_iter)).state_dict())
                 self.vae.state_decoder.train()
@@ -195,6 +203,7 @@ class MetaLearnerML10SDVT:
                 use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
+                optimiser_encoder_pol=self.encoder_pol.optimiser_vae if self.encoder_pol is not None else None,
             )
         else:
             raise NotImplementedError
@@ -241,8 +250,7 @@ class MetaLearnerML10SDVT:
 
         # reset environments
         prev_state, belief, task = utl.reset_env(self.envs, self.args)
-        if self.args.vae_mixture_num > 1:
-            y_intercept = self.sample_y(num_procs=self.args.num_processes, num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist=self.args.virtual_dist)
+        y_intercept = self.sample_y(num_procs=self.args.num_processes, num_virtual_skills=self.args.num_virtual_skills, include_smaller=self.args.include_smaller, dist=self.args.virtual_dist)
 
         self.policy_storage.prev_state[0].copy_(prev_state)
 
@@ -258,13 +266,13 @@ class MetaLearnerML10SDVT:
                 virtual = False
             # First, re-compute the hidden states given the current rollouts (since the VAE might've changed)
             with torch.no_grad():
-                if self.args.vae_mixture_num>1:
-                    latent_sample, latent_mean, latent_logvar, hidden_state, \
-                    y, z, mu, var, logits, prob = self.encode_running_trajectory(virtual)
-                    latent_sample_v = latent_sample.clone().detach() #strictly this is not correct, since the VAE is changing during virtual meta-epi as well,ok beacuase metaepisode ends every iter
-                else:
-                    latent_sample, latent_mean, latent_logvar, hidden_state = self.encode_running_trajectory(virtual)
-                    y=z=mu=var=logits=prob=None
+                latent_sample, latent_mean, latent_logvar, hidden_state, \
+                y, z, mu, var, logits, prob = self.encode_running_trajectory(virtual)
+                # strictly this is not correct, since the VAE is changing during virtual meta-epi as well,ok when metaepisode ends every iter
+                latent_sample_v = latent_sample.clone().detach()
+
+                if self.args.policy_separate_gru:
+                    latent_pol, hidden_state_pol = self.encode_running_trajectory_pol(encoder = self.encoder_pol.encoder)
 
             # add this initial hidden state to the policy storage
             assert len(self.policy_storage.latent_mean) == 0  # make sure we emptied buffers
@@ -272,12 +280,14 @@ class MetaLearnerML10SDVT:
             self.policy_storage.latent_samples.append(latent_sample.clone())
             self.policy_storage.latent_mean.append(latent_mean.clone())
             self.policy_storage.latent_logvar.append(latent_logvar.clone())
-            if self.args.vae_mixture_num>1:
-                self.policy_storage.prob.append(prob.clone())
+            self.policy_storage.prob.append(prob.clone())
+            if self.args.policy_separate_gru:
+                self.policy_storage.latent_pol.append(latent_pol.clone())
+                self.policy_storage.hidden_states_pol[0].copy_(hidden_state_pol)
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step)
+                print(self.iter_idx, step)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -287,6 +297,7 @@ class MetaLearnerML10SDVT:
                         belief=belief,
                         task=task,
                         prob=prob,
+                        latent_pol = latent_pol if self.args.policy_separate_gru else None,
                         deterministic=False,
                         latent_sample=latent_sample,
                         latent_mean=latent_mean,
@@ -313,21 +324,10 @@ class MetaLearnerML10SDVT:
 
                 with torch.no_grad():
                     # compute next embedding (for next loop and/or value prediction bootstrap)
-                    if self.args.vae_mixture_num>1:
-                        if virtual:
-                            y_intercept_ = y_intercept.detach().clone()
-                            latent_sample_v, _, _, _, \
-                            _, _, _, _, _, _ = utl.update_encoding(
-                                encoder=self.vae.encoder,
-                                next_obs=next_state,
-                                action=action,
-                                reward=rew_raw,
-                                done=done,
-                                hidden_state=hidden_state,
-                                vae_mixture_num=self.args.vae_mixture_num,
-                                y_intercept=y_intercept_)
-                        latent_sample, latent_mean, latent_logvar, hidden_state, \
-                        y, z, mu, var, logits, prob  = utl.update_encoding(
+                    if virtual:
+                        y_intercept_ = y_intercept.detach().clone()
+                        latent_sample_v, _, _, _, \
+                        _, _, _, _, _, _ = utl.update_encoding(
                             encoder=self.vae.encoder,
                             next_obs=next_state,
                             action=action,
@@ -335,17 +335,26 @@ class MetaLearnerML10SDVT:
                             done=done,
                             hidden_state=hidden_state,
                             vae_mixture_num=self.args.vae_mixture_num,
-                            y_intercept=None)
-
-                    else:
-                        latent_sample, latent_mean, latent_logvar, hidden_state  = utl.update_encoding(
-                            encoder=self.vae.encoder,
+                            y_intercept=y_intercept_)
+                    latent_sample, latent_mean, latent_logvar, hidden_state, \
+                    y, z, mu, var, logits, prob  = utl.update_encoding(
+                        encoder=self.vae.encoder,
+                        next_obs=next_state,
+                        action=action,
+                        reward=rew_raw,
+                        done=done,
+                        hidden_state=hidden_state,
+                        vae_mixture_num=self.args.vae_mixture_num,
+                        y_intercept=None)
+                    if self.args.policy_separate_gru:
+                        latent_pol, hidden_state_pol = utl.update_encoding_pol(
+                            encoder=self.encoder_pol.encoder,
                             next_obs=next_state,
                             action=action,
                             reward=rew_raw,
                             done=done,
-                            hidden_state=hidden_state,
-                            vae_mixture_num=self.args.vae_mixture_num)
+                            hidden_state=hidden_state_pol,
+                        )
 
                 # before resetting, update the embedding and add to vae buffer
                 # (last state might include useful task info)
@@ -407,6 +416,8 @@ class MetaLearnerML10SDVT:
                     #var=var,
                     #logits=logits,
                     prob=prob,
+                    latent_pol=latent_pol if self.args.policy_separate_gru else None,
+                    hidden_states_pol=hidden_state_pol.squeeze(0) if self.args.policy_separate_gru else None
                 )
                 prev_state = next_state
                 self.frames += self.args.num_processes
@@ -425,6 +436,7 @@ class MetaLearnerML10SDVT:
                                               belief=belief,
                                               task=task,
                                               prob=prob,
+                                              latent_pol=latent_pol if self.args.policy_separate_gru else None,
                                               latent_sample=latent_sample,
                                               latent_mean=latent_mean,
                                               latent_logvar=latent_logvar)
@@ -457,42 +469,52 @@ class MetaLearnerML10SDVT:
             prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
 
         # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
-        if self.args.vae_mixture_num>1:
-            all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states,\
-                all_y, all_z, all_mu, all_var, all_logits, all_prob = self.vae.encoder(actions=act,
-                                                                                                           states=next_obs,
-                                                                                                           rewards=rew,
-                                                                                                           hidden_state=None,
-                                                                                                           return_prior=True)
-        else:
-            all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states = self.vae.encoder(actions=act,
-                                                                                                           states=next_obs,
-                                                                                                           rewards=rew,
-                                                                                                           hidden_state=None,
-                                                                                                           return_prior=True)
+        all_latent_samples, all_latent_means, all_latent_logvars, all_hidden_states,\
+            all_y, all_z, all_mu, all_var, all_logits, all_prob = self.vae.encoder(actions=act,
+                                                                                                       states=next_obs,
+                                                                                                       rewards=rew,
+                                                                                                       hidden_state=None,
+                                                                                                       return_prior=True)
 
         # get the embedding / hidden state of the current time step (need to do this since we zero-padded)
         latent_sample = (torch.stack([all_latent_samples[lens[i]][i] for i in range(len(lens))])).to(device)
         latent_mean = (torch.stack([all_latent_means[lens[i]][i] for i in range(len(lens))])).to(device)
         latent_logvar = (torch.stack([all_latent_logvars[lens[i]][i] for i in range(len(lens))])).to(device)
         hidden_state = (torch.stack([all_hidden_states[lens[i]][i] for i in range(len(lens))])).to(device)
-        if self.args.vae_mixture_num > 1:
-            y = (torch.stack([all_y[lens[i]][i] for i in range(len(lens))])).to(device)
-            z = (torch.stack([all_z[lens[i]][i] for i in range(len(lens))])).to(device)
-            mu = (torch.stack([all_mu[lens[i]][i] for i in range(len(lens))])).to(device)
-            var = (torch.stack([all_var[lens[i]][i] for i in range(len(lens))])).to(device)
-            logits = (torch.stack([all_logits[lens[i]][i] for i in range(len(lens))])).to(device)
-            prob = (torch.stack([all_prob[lens[i]][i] for i in range(len(lens))])).to(device)
-            return latent_sample, latent_mean, latent_logvar, hidden_state,\
-                   y, z, mu, var, logits, prob
+        y = (torch.stack([all_y[lens[i]][i] for i in range(len(lens))])).to(device)
+        z = (torch.stack([all_z[lens[i]][i] for i in range(len(lens))])).to(device)
+        mu = (torch.stack([all_mu[lens[i]][i] for i in range(len(lens))])).to(device)
+        var = (torch.stack([all_var[lens[i]][i] for i in range(len(lens))])).to(device)
+        logits = (torch.stack([all_logits[lens[i]][i] for i in range(len(lens))])).to(device)
+        prob = (torch.stack([all_prob[lens[i]][i] for i in range(len(lens))])).to(device)
+        return latent_sample, latent_mean, latent_logvar, hidden_state,\
+               y, z, mu, var, logits, prob
+
+    def encode_running_trajectory_pol(self, encoder, virtual = False):
+        # for each process, get the current batch (zero-padded obs/act/rew + length indicators)
+        if virtual:
+            prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage_virtual.get_running_batch()
         else:
-            return latent_sample, latent_mean, latent_logvar, hidden_state
+            prev_obs, next_obs, act, rew, lens = self.vae.rollout_storage.get_running_batch()
 
-    def get_value(self, state, belief, task, prob, latent_sample, latent_mean, latent_logvar):
+        # get embedding - will return (1+sequence_len) * batch * input_size -- includes the prior!
+        all_latent_means, all_hidden_states = encoder(actions=act,
+                                                                                                       states=next_obs,
+                                                                                                       rewards=rew,
+                                                                                                       hidden_state=None,
+                                                                                                       return_prior=True,
+                                                                                              sample=False)
+
+        # get the embedding / hidden state of the current time step (need to do this since we zero-padded)
+        latent_mean = (torch.stack([all_latent_means[lens[i]][i] for i in range(len(lens))])).to(device)
+        hidden_state = (torch.stack([all_hidden_states[lens[i]][i] for i in range(len(lens))])).to(device)
+        return latent_mean, hidden_state
+
+    def get_value(self, state, belief, task, prob, latent_pol, latent_sample, latent_mean, latent_logvar):
         latent = utl.get_latent_for_policy(self.args, latent_sample=latent_sample, latent_mean=latent_mean, latent_logvar=latent_logvar)
-        return self.policy.actor_critic.get_value(state=state, belief=belief, task=task, latent=latent, prob=prob).detach()
+        return self.policy.actor_critic.get_value(state=state, belief=belief, task=task, latent=latent, prob=prob, latent_pol=latent_pol).detach()
 
-    def update(self, state, belief, task,prob, latent_sample, latent_mean, latent_logvar):
+    def update(self, state, belief, task, prob, latent_pol, latent_sample, latent_mean, latent_logvar):
         """
         Meta-update.
         Here the policy is updated for good average performance across tasks.
@@ -507,6 +529,7 @@ class MetaLearnerML10SDVT:
                                             belief=belief,
                                             task=task,
                                             prob=prob,
+                                            latent_pol = latent_pol,
                                             latent_sample=latent_sample,
                                             latent_mean=latent_mean,
                                             latent_logvar=latent_logvar)
@@ -520,7 +543,9 @@ class MetaLearnerML10SDVT:
             policy_train_stats = self.policy.update(
                 policy_storage=self.policy_storage,
                 encoder=self.vae.encoder,
+                encoder_pol = self.encoder_pol.encoder if self.args.policy_separate_gru else None,
                 rlloss_through_encoder=self.args.rlloss_through_encoder,
+                policy_separate_gru = self.args.policy_separate_gru,
                 compute_vae_loss=self.vae.compute_vae_loss)
         else:
             policy_train_stats = 0, 0, 0, 0
@@ -536,8 +561,8 @@ class MetaLearnerML10SDVT:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-
-        if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        if 0:
+        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
@@ -556,15 +581,15 @@ class MetaLearnerML10SDVT:
                 episode_successes_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))
 
             save_episode_probs = False
-            if self.args.vae_mixture_num > 1:
-                #save_episode_probs = (self.iter_idx + 1) % (20 * self.args.eval_interval) == 0
-                probs_array = np.zeros((15, total_parametric_num, self.args.vae_mixture_num))
-                if save_episode_probs:
-                    episode_probs_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task,
-                                                    self.envs._max_episode_steps, self.args.vae_mixture_num))
+            #save_episode_probs = (self.iter_idx + 1) % (20 * self.args.eval_interval) == 0
+            probs_array = np.zeros((15, total_parametric_num, self.args.vae_mixture_num))
+            if save_episode_probs:
+                episode_probs_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task,
+                                                self.envs._max_episode_steps, self.args.vae_mixture_num))
 
             for task_class in range(15):
                 for parametric_num in range(total_parametric_num // num_worker):
+                    #print(task_class, parametric_num)
                     task_list = np.concatenate((np.expand_dims(np.repeat(task_class, num_worker), axis=1),
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)
@@ -574,6 +599,7 @@ class MetaLearnerML10SDVT:
                         policy=self.policy,
                         ret_rms=ret_rms,
                         encoder=self.vae.encoder,
+                        encoder_pol=self.encoder_pol.encoder if self.args.policy_separate_gru else None,
                         iter_idx=self.iter_idx,
                         tasks=None,
                         test=False,
@@ -586,10 +612,9 @@ class MetaLearnerML10SDVT:
                     latent_means_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :] = latent_mean
                     latent_logvars_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :] = latent_logvar
                     successes_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker] = successes
-                    if self.args.vae_mixture_num > 1:
-                        probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :] = prob
-                        if save_episode_probs:
-                            episode_probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :, :, :] = episode_probs
+                    probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :] = prob
+                    if save_episode_probs:
+                        episode_probs_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :, :, :] = episode_probs
                     if save_episode_successes:
                         episode_successes_array[task_class, parametric_num * num_worker:(parametric_num + 1) * num_worker, :] = episode_successes
 
@@ -629,11 +654,11 @@ class MetaLearnerML10SDVT:
             if save_episode_successes:
                 np.save('{}/{}/episode_successes_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                         episode_successes_array)
-            if self.args.vae_mixture_num > 1:
-                np.save('{}/{}/probs.npy'.format(self.logger.full_output_folder, self.iter_idx), probs_array)
-                if save_episode_probs:
-                    np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
-                            episode_probs_array)
+
+            np.save('{}/{}/probs.npy'.format(self.logger.full_output_folder, self.iter_idx), probs_array)
+            if save_episode_probs:
+                np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
+                        episode_probs_array)
             self.task_count = np.zeros((self.args.num_processes))
             self.recent_train_success = taskwise_mean_success[:10]
         # --- save models ---
@@ -650,13 +675,16 @@ class MetaLearnerML10SDVT:
 
                 torch.save(self.policy.actor_critic, os.path.join(save_path, f"policy{idx_label}.pt"))
                 torch.save(self.vae.encoder, os.path.join(save_path, f"encoder{idx_label}.pt"))
-                #torch.save(self.policy_resample, os.path.join(save_path, f"policy_resample{idx_label}.pt"))
+
                 if self.vae.state_decoder is not None:
                     torch.save(self.vae.state_decoder, os.path.join(save_path, f"state_decoder{idx_label}.pt"))
                 if self.vae.reward_decoder is not None:
                     torch.save(self.vae.reward_decoder, os.path.join(save_path, f"reward_decoder{idx_label}.pt"))
                 if self.vae.task_decoder is not None:
                     torch.save(self.vae.task_decoder, os.path.join(save_path, f"task_decoder{idx_label}.pt"))
+                if self.args.policy_separate_gru:
+                    torch.save(self.encoder_pol.encoder, os.path.join(save_path, f"encoder_pol{idx_label}.pt"))
+                    torch.save(self.encoder_pol.optimiser_vae.state_dict(), os.path.join(save_path, f"encoder_pol_optimiser_pol{idx_label}.pt"))
                 torch.save(self.vae.optimiser_vae.state_dict(), os.path.join(save_path, f"optimiser_vae{idx_label}.pt"))
                 torch.save(self.policy.optimiser.state_dict(), os.path.join(save_path, f"optimiser_pol{idx_label}.pt"))
                 #torch.save(self.policy_resample.optimiser.state_dict(),os.path.join(save_path, f"optimiser_pol_res{idx_label}.pt"))
@@ -673,8 +701,8 @@ class MetaLearnerML10SDVT:
         # --- log some other things ---
 
         #if 1:
-        #if train_stats is not None and self.iter_idx>0:
-        if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
+        if train_stats is not None and self.iter_idx>0:
+        #if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)
             self.logger.add('environment/state_min', self.policy_storage.prev_state.min(), self.iter_idx)
@@ -702,17 +730,18 @@ class MetaLearnerML10SDVT:
                 [self.vae.encoder, 'encoder'],
                 [self.vae.reward_decoder, 'reward_decoder'],
                 [self.vae.state_decoder, 'state_transition_decoder'],
-                [self.vae.task_decoder, 'task_decoder']
+                [self.vae.task_decoder, 'task_decoder'],
+                [self.encoder_pol.encoder, 'policy_encoder'] if self.args.policy_separate_gru else [None, None]
             ]:
                 if model is not None:
                     param_list = list(model.parameters())
                     param_mean = np.mean([param_list[i].data.cpu().numpy().mean() for i in range(len(param_list))])
 
-                    #print('name', name)
-                    #print('model', model)
-                    #for i in range(len(param_list)):
-                    #    print('param_list grad ',i, param_list[i].grad is None , param_list[i].size())
-                    #    print(param_list[i].data.mean())
+                    print('name', name)
+                    print('model', model)
+                    for i in range(len(param_list)):
+                        print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
+                        print(param_list[i].data.mean())
 
                     self.logger.add('weights/{}'.format(name), param_mean, self.iter_idx)
                     if name == 'policy':
