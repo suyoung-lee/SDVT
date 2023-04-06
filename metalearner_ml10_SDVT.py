@@ -737,11 +737,11 @@ class MetaLearnerML10SDVT:
                     param_list = list(model.parameters())
                     param_mean = np.mean([param_list[i].data.cpu().numpy().mean() for i in range(len(param_list))])
 
-                    print('name', name)
-                    print('model', model)
-                    for i in range(len(param_list)):
-                        print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
-                        print(param_list[i].data.mean())
+                    #print('name', name)
+                    #print('model', model)
+                    #for i in range(len(param_list)):
+                    #    print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
+                    #    print(param_list[i].data.mean())
 
                     self.logger.add('weights/{}'.format(name), param_mean, self.iter_idx)
                     if name == 'policy':

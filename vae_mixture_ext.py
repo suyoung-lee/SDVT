@@ -199,6 +199,23 @@ class VaribadVAEMixtureExt:
         log_q = F.log_softmax(logits, dim=-1)
         return -torch.mean(torch.sum(targets * log_q, dim=-1))
 
+    def occupancy_loss(self, y):
+        """occupancy loss to suppress usage of larger subtask index
+            loss = logK * (1/f(K)) * -Σ (1,...,f(K)) dot y for linear
+        Args:
+            y: sampled categorical
+        args.type: How f(K) is defined, linear square, or exponential
+        maximum is set as log(K) to match magnitude of the entropy loss
+        """
+        if self.args.occ_loss_type == 'linear':
+            occ_coeff = np.log(self.args.vae_mixture_num) * torch.arange(1,self.args.vae_mixture_num+1)/self.args.vae_mixture_num
+        if self.args.occ_loss_type == 'log':
+            occ_coeff = torch.log(torch.range(1,self.args.vae_mixture_num))
+
+        occ_loss = occ_coeff.to(device) * y
+
+        return torch.mean(torch.sum(occ_loss, dim=-1))
+
     def compute_state_reconstruction_loss(self, latent, prev_obs, next_obs, action, return_predictions=False):
         """ Compute state reconstruction loss.
         (No reduction of loss along batch dimension is done here; sum/avg has to be done outside) """
@@ -436,10 +453,14 @@ class VaribadVAEMixtureExt:
 
         loss_gauss = self.gaussian_loss(z, mu, var, y_mu, y_var)
         loss_cat = -self.entropy(logits, prob) - np.log(1.0/self.args.vae_mixture_num) #uniform entropy
+        if self.args.occ_loss_coeff!=0:
+            loss_occ = self.occupancy_loss(y)
+        else:
+            loss_occ = 0
 
         loss_ext = (output_embedding.detach()-h_hat).pow(2).mean() #extrapolation loss from DiaMetR
 
-        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, loss_gauss, loss_cat, loss_ext
+        return rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, loss_gauss, loss_cat, loss_occ, loss_ext
 
     def compute_loss_split_batches_by_elbo(self, latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_actions,
                                            vae_rewards, vae_tasks, trajectory_lens):
@@ -587,7 +608,7 @@ class VaribadVAEMixtureExt:
         else:
             losses = self.compute_loss(latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_actions,
                                        vae_rewards, vae_tasks, trajectory_lens, y, z, mu, var, logits, prob, output)
-        rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, ext_loss = losses
+        rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, occ_loss, ext_loss = losses
 
         # take average (this is the expectation over p(M))
         loss = (self.args.rew_loss_coeff * rew_reconstruction_loss +
@@ -595,6 +616,7 @@ class VaribadVAEMixtureExt:
                 self.args.task_loss_coeff * task_reconstruction_loss +
                 self.args.gauss_loss_coeff * gauss_loss +
                 self.args.cat_loss_coeff * cat_loss +
+                self.args.occ_loss_coeff * occ_loss +
                 self.args.ext_loss_coeff * ext_loss).mean()
 
         # make sure we can compute gradients
@@ -606,6 +628,7 @@ class VaribadVAEMixtureExt:
             assert task_reconstruction_loss.requires_grad
         assert gauss_loss.requires_grad
         assert cat_loss.requires_grad
+        assert occ_loss.requires_grad
         assert ext_loss.requires_grad
 
         # overall loss
@@ -627,12 +650,12 @@ class VaribadVAEMixtureExt:
             # update
             self.optimiser_vae.step()
 
-        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, ext_loss, pretrain_index)
+        self.log(elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, occ_loss, ext_loss, pretrain_index)
 
 
         return elbo_loss
 
-    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, ext_loss, pretrain_index=None):
+    def log(self, elbo_loss, rew_reconstruction_loss, state_reconstruction_loss, task_reconstruction_loss, gauss_loss, cat_loss, occ_loss, ext_loss, pretrain_index=None):
 
         if pretrain_index is None:
             curr_iter_idx = self.get_iter_idx()
@@ -650,5 +673,6 @@ class VaribadVAEMixtureExt:
 
             self.logger.add('vae_losses/gauss_loss', gauss_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/cat_loss', cat_loss.mean(), curr_iter_idx)
+            self.logger.add('vae_losses/occ_loss', occ_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/ext_loss', ext_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/sum', elbo_loss, curr_iter_idx)

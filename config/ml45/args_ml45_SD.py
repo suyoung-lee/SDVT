@@ -123,6 +123,11 @@ def get_args(rest_args):
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')
+    parser.add_argument('--occ_loss_coeff', type=float, default=0.0, help='Occupancy regularization coefficient')
+    parser.add_argument('--occ_loss_type', type=str, default='linear',
+                        help='choose: '
+                             'linear'
+                             'log')
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
