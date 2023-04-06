@@ -85,7 +85,6 @@ class PPO:
         self.actor_critic.update_rms(args=self.args, policy_storage=policy_storage)
 
         # TODO this does not work for variBAD rllloss through encoder, need to figure out why,
-        print('==0')
         if rlloss_through_encoder:
             # recompute embeddings (to build computation graph)
             utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=0,
@@ -217,7 +216,6 @@ class PPO:
                 dist_entropy_epoch += dist_entropy.item()
                 loss_epoch += loss.item()
 
-                print('==1')
                 if rlloss_through_encoder:
                     # recompute embeddings (to build computation graph)
                     utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
