@@ -210,7 +210,7 @@ class VaribadVAEMixture:
         if self.args.occ_loss_type == 'linear':
             occ_coeff = np.log(self.args.vae_mixture_num) * torch.arange(1,self.args.vae_mixture_num+1)/self.args.vae_mixture_num
         if self.args.occ_loss_type == 'log':
-            occ_coeff = torch.log(torch.range(1,self.args.vae_mixture_num))
+            occ_coeff = torch.log(torch.arange(1,self.args.vae_mixture_num+1))
 
         occ_loss = occ_coeff.to(device) * y
 
@@ -626,7 +626,8 @@ class VaribadVAEMixture:
             assert task_reconstruction_loss.requires_grad
         assert gauss_loss.requires_grad
         assert cat_loss.requires_grad
-        assert occ_loss.requires_grad
+        if self.args.occ_loss_coeff!=0:
+            assert occ_loss.requires_grad
 
         # overall loss
         elbo_loss = loss.mean()
@@ -670,5 +671,6 @@ class VaribadVAEMixture:
 
             self.logger.add('vae_losses/gauss_loss', gauss_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/cat_loss', cat_loss.mean(), curr_iter_idx)
-            self.logger.add('vae_losses/occ_loss', occ_loss.mean(), curr_iter_idx)
+            if self.args.occ_loss_coeff != 0:
+                self.logger.add('vae_losses/occ_loss', occ_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/sum', elbo_loss, curr_iter_idx)
