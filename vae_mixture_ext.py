@@ -628,7 +628,8 @@ class VaribadVAEMixtureExt:
             assert task_reconstruction_loss.requires_grad
         assert gauss_loss.requires_grad
         assert cat_loss.requires_grad
-        assert occ_loss.requires_grad
+        if self.args.occ_loss_coeff != 0:
+            assert occ_loss.requires_grad
         assert ext_loss.requires_grad
 
         # overall loss
@@ -673,6 +674,7 @@ class VaribadVAEMixtureExt:
 
             self.logger.add('vae_losses/gauss_loss', gauss_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/cat_loss', cat_loss.mean(), curr_iter_idx)
-            self.logger.add('vae_losses/occ_loss', occ_loss.mean(), curr_iter_idx)
+            if self.args.occ_loss_coeff != 0:
+                self.logger.add('vae_losses/occ_loss', occ_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/ext_loss', ext_loss.mean(), curr_iter_idx)
             self.logger.add('vae_losses/sum', elbo_loss, curr_iter_idx)

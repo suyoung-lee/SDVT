@@ -228,8 +228,15 @@ class MetaLearnerML45SDVT:
                 alpha[index]=1.0
                 y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
                 y_sample[i,:] = torch.matmul(y_dist.sample(),past_y)
-
+        elif dist == 'rms':
+            alpha = self.policy.actor_critic.prob_rms.mean
+            print('alpha:', alpha)
+            for i in range(num_procs):
+                y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
+                y_sample[i,:] = y_dist.sample()
+            print('y_sample: ', y_sample)
         y_sample = y_sample.to(device)
+
         return y_sample
 
     def train(self):
@@ -268,6 +275,7 @@ class MetaLearnerML45SDVT:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
+                #print(self.iter_idx, step)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -508,7 +516,7 @@ class MetaLearnerML45SDVT:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-
+        #if 0:
         if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval

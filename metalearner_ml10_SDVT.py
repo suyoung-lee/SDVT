@@ -240,7 +240,11 @@ class MetaLearnerML10SDVT:
                 alpha[index]=1.0
                 y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
                 y_sample[i,:] = torch.matmul(y_dist.sample(),past_y)
-
+        elif dist == 'rms':
+            alpha = self.policy.actor_critic.prob_rms.mean
+            for i in range(num_procs):
+                y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
+                y_sample[i,:] = y_dist.sample()
         y_sample = y_sample.to(device)
         return y_sample
 
@@ -260,15 +264,15 @@ class MetaLearnerML10SDVT:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
+            if random.random()<self.virtual_ratio: #CAUTION: this code is valid only when policy_num_steps is multiple of 5000
                 virtual = True
             else:
                 virtual = False
             # First, re-compute the hidden states given the current rollouts (since the VAE might've changed)
             with torch.no_grad():
                 latent_sample, latent_mean, latent_logvar, hidden_state, \
-                y, z, mu, var, logits, prob = self.encode_running_trajectory(virtual)
-                # strictly this is not correct, since the VAE is changing during virtual meta-epi as well,ok when metaepisode ends every iter
+                y, z, mu, var, logits, prob = self.encode_running_trajectory(virtual) #CAUTION: this code is valid only when policy_num_steps is multiple of 5000
+                # strictly this is not correct, since the VAE is changing during virtual meta-epi as well,ok only when meta-episode ends every iter
                 latent_sample_v = latent_sample.clone().detach()
 
                 if self.args.policy_separate_gru:
@@ -287,7 +291,7 @@ class MetaLearnerML10SDVT:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                print(self.iter_idx, step)
+                #print(self.iter_idx, step, virtual)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -561,8 +565,8 @@ class MetaLearnerML10SDVT:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-        if 0:
-        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        #if 0:
+        if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
