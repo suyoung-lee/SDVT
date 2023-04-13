@@ -209,8 +209,10 @@ class VaribadVAEMixture:
         """
         if self.args.occ_loss_type == 'linear':
             occ_coeff = np.log(self.args.vae_mixture_num) * torch.arange(1,self.args.vae_mixture_num+1)/self.args.vae_mixture_num
-        if self.args.occ_loss_type == 'log':
+        elif self.args.occ_loss_type == 'log':
             occ_coeff = torch.log(torch.arange(1,self.args.vae_mixture_num+1))
+        elif self.args.occ_loss_type == 'exp':
+            occ_coeff = np.log(self.args.vae_mixture_num) * torch.exp(torch.arange(1,self.args.vae_mixture_num+1))/np.exp(self.args.vae_mixture_num)
 
         occ_loss = occ_coeff.to(device) * y
 

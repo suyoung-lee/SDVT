@@ -230,11 +230,9 @@ class MetaLearnerML45SDVT:
                 y_sample[i,:] = torch.matmul(y_dist.sample(),past_y)
         elif dist == 'rms':
             alpha = self.policy.actor_critic.prob_rms.mean
-            print('alpha:', alpha)
             for i in range(num_procs):
                 y_dist = torch.distributions.dirichlet.Dirichlet(alpha)
                 y_sample[i,:] = y_dist.sample()
-            print('y_sample: ', y_sample)
         y_sample = y_sample.to(device)
 
         return y_sample
