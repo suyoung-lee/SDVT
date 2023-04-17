@@ -127,7 +127,9 @@ def get_args(rest_args):
     parser.add_argument('--occ_loss_type', type=str, default='linear',
                         help='choose: '
                              'linear'
-                             'log')
+                             'log'
+                             'exp'
+                        )
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
@@ -228,7 +230,7 @@ def get_args(rest_args):
     parser.add_argument('--num_virtual_skills', type=int, default=3)
     parser.add_argument('--include_smaller', type=boolean_argument, default=False,
                         help='allow smaller number of virtual skills')
-    parser.add_argument('--virtual_dist', default='dir', help='virtual skill distribution, currently uni and dir')
+    parser.add_argument('--virtual_dist', default='dir', help='virtual skill distribution, currently uni, dir, dir-interpolate, and rms')
     parser.add_argument('--virtual_intrinsic', type=float, default=0.0,
                         help='weight for virtual reward')
 

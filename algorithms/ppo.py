@@ -136,7 +136,7 @@ class PPO:
                                                        belief=belief_batch, task=task_batch, prob=prob_batch,latent_pol = latent_pol_batch,
                                                        action=actions_batch)
                 ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
-                #ratio = torch.exp(torch.clamp(action_log_probs - old_action_log_probs_batch, -88, 88)) #prevent surr being 0 or -inf
+                #ratio = torch.exp(torch.clamp(action_log_probs - old_action_log_probs_batch, -40, 40)) #prevent surr being 0 or -inf
                 #print('ratio:', ratio)
                 #print('action_log_probs:', action_log_probs)
                 #print('old_action_log_probs_batch:', old_action_log_probs_batch)

@@ -69,7 +69,7 @@ def get_args(rest_args):
     parser.add_argument('--policy_eps', type=float, default=1e-8, help='optimizer epsilon (1e-8 for ppo, 1e-5 for a2c)')
     parser.add_argument('--policy_init_std', type=float, default=1.0, help='only used for continuous actions')
     parser.add_argument('--policy_min_std', type=float, default=0.5, help='minimum std of policy only used for continuous actions')
-    parser.add_argument('--policy_max_std', type=float, default=1.5, help='maximum std of policy only used for continuous actions')
+    parser.add_argument('--policy_max_std', type=float, default=1.5, help='maximum std of policy only used for continuous actions, no clip when 0.0')
     parser.add_argument('--policy_value_loss_coef', type=float, default=0.5, help='value loss coefficient')
     parser.add_argument('--policy_entropy_coef', type=float, default=0.001, help='entropy term coefficient')
     parser.add_argument('--policy_gamma', type=float, default=0.99, help='discount factor for rewards')

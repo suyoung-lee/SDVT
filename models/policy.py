@@ -360,7 +360,7 @@ class DiagGaussian(nn.Module):
         self.fc_mean = init_(nn.Linear(num_inputs, num_outputs))
         self.logstd = nn.Parameter(np.log(torch.zeros(num_outputs) + init_std))
         self.norm_actions_pre_sampling = norm_actions_pre_sampling
-        if min_std is None:
+        if max_std == 0:
             self.min_std = torch.tensor([1e-6]).to(device)
             self.clip_std = False
         else:

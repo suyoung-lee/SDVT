@@ -127,7 +127,9 @@ def get_args(rest_args):
     parser.add_argument('--occ_loss_type', type=str, default='linear',
                         help='choose: '
                              'linear'
-                             'log')
+                             'log'
+                             'exp'
+                        )
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
