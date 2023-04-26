@@ -41,8 +41,8 @@ class ML45(Env):
 
     def reset_task(self, task=None):
         if task is None:
-            #env_ind = random.choice(range(45))
-            env_ind = random.choice([x for x in range(0, 45) if x != 34]) #observation explosion bug in pegunplugside
+            env_ind = random.choice(range(45))
+            #env_ind = random.choice([x for x in range(0, 45) if x != 34]) #observation explosion bug in pegunplugside
             self._env = self.train_env_cls_list[env_ind]
             _env_name = self.train_env_name_list[env_ind]
             subtask_ind = random.choice(range(50))
@@ -82,14 +82,16 @@ class ML45(Env):
     def _get_obs(self):
         return np.copy(self._state)
 
+    # add 'image' to render
     def step(self, action):
         action_ = np.clip(action, self.action_space.low, self.action_space.high)
         self._state, reward, done, info = self._env.step(action_)
         ob = self._get_obs()
-
-        info = {'task': self.get_task(), 'success': info['success']}
         #info = {'task': self.get_task(), 'success': info['success'], 'image': self._env.render(offscreen=True)}  # for rendering
+        info = {'task': self.get_task(), 'success': info['success']}
+
         return ob, reward, done, info
+
 
     @staticmethod
     def visualise_behaviour_ml10(env,

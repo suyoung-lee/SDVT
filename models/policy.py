@@ -88,7 +88,7 @@ class Policy(nn.Module):
         # (will be updated from outside using the RL batches)
         self.norm_state = self.args.norm_state_for_policy and (dim_state is not None)
         if self.pass_state_to_policy and self.norm_state:
-            self.state_rms = utl.RunningMeanStd(shape=(dim_state))
+            self.state_rms = utl.RunningMeanStd(shape=(dim_state), clip_state=[-1.0,1.0]) #for some ML-45 diverging tasks
         self.norm_latent = self.args.norm_latent_for_policy and (dim_latent is not None)
         if self.pass_latent_to_policy and self.norm_latent:
             self.latent_rms = utl.RunningMeanStd(shape=(dim_latent))

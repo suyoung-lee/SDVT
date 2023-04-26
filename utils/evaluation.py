@@ -191,10 +191,14 @@ def evaluate_metaworld(args,
         latent_pol = hidden_state_pol = None
 
     meta_successes = np.zeros(num_processes)
+
+    env_step = utl.env_step
+
     for episode_idx in range(num_episodes):
         successes = np.zeros(num_processes)
         if args.render: #save videos for each rollout episode
             for i in range(num_processes):
+                print(episode_idx, i)
                 if args.load_iter is None:
                     os.makedirs(
                         'renders/{}/task{:2d}/subtask{:2d}'.format(iter_idx, task_list[i, 0],
@@ -221,7 +225,7 @@ def evaluate_metaworld(args,
                                               )
 
             # observe reward and next obs
-            [state, belief, task], (rew_raw, rew_normalised), done, infos = utl.env_step(envs, action, args)
+            [state, belief, task], (rew_raw, rew_normalised), done, infos = env_step(envs, action, args)
 
             done_mdp = [info['done_mdp'] for info in infos]
             successes = np.fmax(successes, [info['success'] for info in infos])
