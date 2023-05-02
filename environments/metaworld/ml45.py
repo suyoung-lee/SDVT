@@ -11,6 +11,7 @@ from gym import spaces
 
 import metaworld
 
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class ML45(Env):
@@ -84,9 +85,12 @@ class ML45(Env):
 
     # add 'image' to render
     def step(self, action):
+
+
         action_ = np.clip(action, self.action_space.low, self.action_space.high)
         self._state, reward, done, info = self._env.step(action_)
         ob = self._get_obs()
+        ob = np.clip(ob, -1.0, 1.0) #mitigate instability due to bugs with observation exploration in some tasks in ML45
         #info = {'task': self.get_task(), 'success': info['success'], 'image': self._env.render(offscreen=True)}  # for rendering
         info = {'task': self.get_task(), 'success': info['success']}
 

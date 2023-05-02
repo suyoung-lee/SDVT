@@ -371,16 +371,13 @@ def load_obj(folder, name):
 class RunningMeanStd(object):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
     # PyTorch version.
-    def __init__(self, epsilon=1e-4, shape=(), clip_state=None):
+    def __init__(self, epsilon=1e-4, shape=()):
         self.mean = torch.zeros(shape).float().to(device)
         self.var = torch.ones(shape).float().to(device)
         self.count = epsilon
-        self.clip_state = clip_state
 
     def update(self, x):
         x = x.view((-1, x.shape[-1]))
-        if self.clip_state is not None:
-            x=torch.clamp(x, self.clip_state[0], self.clip_state[1]) #for some ML-45 diverging tasks
         batch_mean = x.mean(dim=0)
         batch_var = x.var(dim=0)
         batch_count = x.shape[0]

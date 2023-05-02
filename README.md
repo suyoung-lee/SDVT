@@ -1,6 +1,6 @@
 #SDVT
 
-Supplemantary material of Subtask Decomposition and Virtual Training (SDVT) for ICML 2023.
+Supplemantary material of Subtask Decomposition and Virtual Training (SDVT) submitted for NeurIPS 2023.
 
 Please do not distribute.
 
