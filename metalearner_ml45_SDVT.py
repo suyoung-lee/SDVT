@@ -253,7 +253,8 @@ class MetaLearnerML45SDVT:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            #print('iter: ', self.iter_idx)
+            if self.iter_idx%100==0:
+                print('iter: ', self.iter_idx)
             if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
                 virtual = True
             else:
@@ -516,7 +517,8 @@ class MetaLearnerML45SDVT:
 
         # --- evaluate policy ----
         #if 0:
-        if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        if self.iter_idx>0 and ((self.iter_idx + 1) % self.args.eval_interval == 0):
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:

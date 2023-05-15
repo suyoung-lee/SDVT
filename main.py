@@ -1,4 +1,4 @@
-""" 218 SDVT
+"""SDVT
 Main scripts to start experiments.
 Takes a flag --env-type (see below for choices) and loads the parameters from the respective config file.
 """
@@ -23,7 +23,7 @@ from metalearner_ml10_VariBAD import MetaLearnerML10VariBAD
 from metalearner_ml45_SDVT import MetaLearnerML45SDVT
 from metalearner_ml45_LDM import MetaLearnerML45LDM
 from metalearner_ml45_VariBAD import MetaLearnerML45VariBAD
-
+from metaeval_ml10 import MetaEvalML10
 
 def main():
     parser = argparse.ArgumentParser()
@@ -62,6 +62,14 @@ def main():
                 args.__dict__ = json.load(f)
             args.load_dir = load_dir
             args.load_iter = load_iter
+        print(args)
+    elif env in ['ml10-eval']:
+        load_dir = args.load_dir
+        load_iter = args.load_iter
+        with open(load_dir + 'config.json', 'r') as f:
+            args.__dict__ = json.load(f)
+        args.load_dir = load_dir
+        args.load_iter = load_iter
         print(args)
     else:
         raise Exception("Invalid Environment")
@@ -133,6 +141,9 @@ def main():
             # If `disable_metalearner` is true, the file `learner.py` will be used instead of `metalearner.py`.
             # This is a stripped down version without encoder, decoder, stochastic latent variables, etc.
             learner = Learner(args)
+        elif env == 'ml10-eval':
+            args.results_log_dir = args.results_log_dir + '_eval'
+            learner = MetaEvalML10(args)
         else:
             learner = MetaLearner(args)
         learner.train()
