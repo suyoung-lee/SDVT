@@ -28,7 +28,7 @@ torch.autograd.set_detect_anomaly(True)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class MetaEvalML10:
+class MetaEvalML45:
     """
     Meta-Learner class with the main training loop for variBAD.
     """
@@ -52,7 +52,7 @@ class MetaEvalML10:
 
         header = ['iter', 'frames']
         for record_type in ['R', 'S', 'SF', 'RF']:
-            for task_num in range(15):
+            for task_num in range(50):
                 header += [record_type + str(task_num)]
         with open(self.logger.full_output_folder + '/log_eval.csv', 'w', encoding='UTF8') as f:
             writer = csv.writer(f)
@@ -210,7 +210,7 @@ class MetaEvalML10:
 
         # log once before training
         if self.args.load_iter is None:
-            iter_scope = np.arange(-1,5000, 200)
+            iter_scope = np.arange(-1, 8000, 1000)
         else:
             iter_scope = [self.args.load_iter]
         for iter_idx in iter_scope:

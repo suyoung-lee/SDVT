@@ -443,14 +443,10 @@ class MetaLearnerML45LDM:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-
         if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
-            if (self.iter_idx + 1) % (10 * self.args.eval_interval) == 0:
-                total_parametric_num = 10
-            else:
-                total_parametric_num = 10
+            total_parametric_num = self.args.parametric_num
 
             num_worker = 10
             returns_array = np.zeros((50, total_parametric_num, self.args.max_rollouts_per_task))

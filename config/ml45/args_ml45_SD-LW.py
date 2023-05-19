@@ -8,10 +8,10 @@ def get_args(rest_args):
     # --- GENERAL ---
 
     # training parameters
-    parser.add_argument('--num_frames', type=int, default=35e7, help='number of frames to train')
+    parser.add_argument('--num_frames', type=int, default=40e7, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
-    parser.add_argument('--exp_label', default='VariBAD', help='label (typically name of method)')
-    parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
+    parser.add_argument('--exp_label', default='SD', help='label (typically name of method)')
+    parser.add_argument('--env_name', default='ML45Env-v2', help='environment to train on')
 
     # --- POLICY ---
 
@@ -58,6 +58,7 @@ def get_args(rest_args):
     parser.add_argument('--ppo_use_huberloss', type=boolean_argument, default=True, help='use huberloss instead of MSE')
     parser.add_argument('--ppo_use_clipped_value_loss', type=boolean_argument, default=True, help='clip value loss')
     parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param')
+    parser.add_argument('--ppo_disc',  type=boolean_argument, default=False, help='dimension-wise clipping')
 
     # other hyperparameters
     parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)')
@@ -68,7 +69,7 @@ def get_args(rest_args):
     parser.add_argument('--policy_eps', type=float, default=1e-8, help='optimizer epsilon (1e-8 for ppo, 1e-5 for a2c)')
     parser.add_argument('--policy_init_std', type=float, default=1.0, help='only used for continuous actions')
     parser.add_argument('--policy_min_std', type=float, default=0.5, help='minimum std of policy only used for continuous actions')
-    parser.add_argument('--policy_max_std', type=float, default=1.5, help='maximum std of policy only used for continuous actions')
+    parser.add_argument('--policy_max_std', type=float, default=1.5, help='maximum std of policy only used for continuous actions, no clip when 0.0')
     parser.add_argument('--policy_value_loss_coef', type=float, default=0.5, help='value loss coefficient')
     parser.add_argument('--policy_entropy_coef', type=float, default=0.001, help='entropy term coefficient')
     parser.add_argument('--policy_gamma', type=float, default=0.99, help='discount factor for rewards')
@@ -82,7 +83,7 @@ def get_args(rest_args):
     parser.add_argument('--decoder_max_grad_norm', type=float, default=1.0, help='max norm of gradients')
 
     # --- VAE TRAINING ---
-    parser.add_argument('--dropout_rate', type=float, default=0.0, help='dropout rate for non-latent input of decoder')
+    parser.add_argument('--dropout_rate', type=float, default=0.7, help='dropout rate for non-latent input of decoder')
     # general
     parser.add_argument('--lr_vae', type=float, default=0.001)
     parser.add_argument('--size_vae_buffer', type=int, default=1000,
@@ -103,7 +104,7 @@ def get_args(rest_args):
                         help='Average ELBO terms (instead of sum)')
     parser.add_argument('--vae_avg_reconstruction_terms', type=boolean_argument, default=True,
                         help='Average reconstruction terms (instead of sum)')
-    parser.add_argument('--num_vae_updates', type=int, default=10,
+    parser.add_argument('--num_vae_updates', type=int, default=20,
                         help='how many VAE update steps to take per meta-iteration')
     parser.add_argument('--pretrain_len', type=int, default=0, help='for how many updates to pre-train the VAE')
     parser.add_argument('--kl_weight', type=float, default=0.1, help='weight for the KL term')
@@ -114,14 +115,18 @@ def get_args(rest_args):
                         help='split batches up by elbo term (to save memory of if ELBOs are of different length)')
 
     #Gaussian mixture
-    parser.add_argument('--vae_mixture_num', type=int, default=1,
+    parser.add_argument('--vae_mixture_num', type=int, default=5,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')
-    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
-                        help='how many mixture gaussian to use, 1 means unimodal')
+    parser.add_argument('--cat_loss_coeff', type=float, default=0.5,
+                        help='weight for the categorical loss')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')
+    parser.add_argument('--occ_loss_coeff', type=float, default=0.0, help='Occupancy regularization coefficient')
+    parser.add_argument('--occ_loss_type', type=str, default='exp',
+                        help='choose: '
+                             'linear' 'log' 'exp')
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
@@ -130,7 +135,7 @@ def get_args(rest_args):
     parser.add_argument('--encoder_layers_before_gru', nargs='+', type=int, default=[])
     parser.add_argument('--encoder_gru_hidden_size', type=int, default=256, help='dimensionality of RNN hidden state')
     parser.add_argument('--encoder_layers_after_gru', nargs='+', type=int, default=[])
-    parser.add_argument('--latent_dim', type=int, default=5, help='dimensionality of latent space')
+    parser.add_argument('--latent_dim', type=int, default=10, help='dimensionality of latent space')
 
     # - decoder: rewards
     parser.add_argument('--decode_reward', type=boolean_argument, default=True, help='use reward decoder')
@@ -203,7 +208,7 @@ def get_args(rest_args):
     parser.add_argument('--log_interval', type=int, default=50, help='log interval, one log per n updates')
     parser.add_argument('--save_interval', type=int, default=200, help='save interval, one save per n updates')
     parser.add_argument('--save_intermediate_models', type=boolean_argument, default=True, help='save all models')
-    parser.add_argument('--eval_interval', type=int, default=200, help='eval interval, one eval per n updates')
+    parser.add_argument('--eval_interval', type=int, default=1000, help='eval interval, one eval per n updates')
     parser.add_argument('--vis_interval', type=int, default=500, help='visualisation interval, one eval per n updates')
     parser.add_argument('--results_log_dir', default=None, help='directory to save results (None uses ./logs)')
     parser.add_argument('--render', type=boolean_argument, default=False,
@@ -218,7 +223,7 @@ def get_args(rest_args):
 
     # --- Virtual ---
     parser.add_argument('--virtual_ratio', type=float, default=0.0, help='virtual training ratio')
-    parser.add_argument('--virtual_ratio_increment', type=float, default=0.05, help='virtual ratio increased per 100M steps')
+    parser.add_argument('--virtual_ratio_increment', type=float, default=0.0, help='virtual ratio increased per 100M steps')
     parser.add_argument('--num_virtual_skills', type=int, default=3)
     parser.add_argument('--include_smaller', type=boolean_argument, default=False,
                         help='allow smaller number of virtual skills')

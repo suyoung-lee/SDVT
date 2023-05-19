@@ -6,37 +6,72 @@ Please do not distribute.
 
 
 ### Requirements
-Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad). Please refer to the `requirements.txt`
+Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad). 
 
-In addition to the requirements there, you need to install [metaworld](https://github.com/Farama-Foundation/Metaworld) and cv2.
+Please refer to the `requirements.txt`
+
+`pip install -r requirements.txt`
+
+In addition to those requirements, you need to install [metaworld](https://github.com/Farama-Foundation/Metaworld) to run experiments on ML-10.
+
+    #IMPORTANT
+    On May 9, 2023, there has been a large update in Meta-World, that includes changes in some tasks.
+    It is recommended to use previous version of Meta-World
+    to maintain consistency with previous works and to reproduce our results.
+    
+    git clone https://github.com/rlworkgroup/metaworld.git
+    cd metaworld
+    pip install -e .
+    git reset --hard 04be337a12305e393c0caf0cbf5ec7755c7c8feb
+
 
 ### Overview
 
-The main part of our implementation is at `metalearner_ml10.py`, the GMVAE with dispersion at `vae_mixture_ext.py`.
-
-There's quite a bit of documentation in the respective scripts so have a look there for details.
+The main parts of our implementations are at `metalearner_ml10_...py`, `metalearner_ml45_...py` and the GMVAE with dispersion at `vae_mixture_ext.py`.
 
 ### Reproducing the results
+All the configuration files are in `config/` folder.
 
-To run our SDVT algorithm on ML-10,
+* To run our SDVT algorithm on ML-10,
 
-`python main.py --env-type gridworld_varibad`
- 
-It will use the default hyperparmeters at `config/gridworld/args_grid_varibad.py`
-and the results will be logged at `logs/` directory.
+`python main.py --env-type ml10-SDVT`
 
 
-To run SDVT without virtual training,
+* You may play around different hyperparameters in the `config/` folder as follows
 
-`python main.py --env-type gridworld_varibad`
+`python main.py --env-type ml10-SDVT --vae_mixture_num 5 --cat_loss_coeff 0.5`
 
-To reproduce the result of variBAD and LDM,
 
-`python main.py --env-type gridworld_varibad`
+* To run SDVT without virtual training,
 
-`python main.py --env-type gridworld_varibad`
+`python main.py --env-type ml10-SD`
+
+* To run the lightweight version of our methods,
+
+`python main.py --env-type ml10-SDVT-LW`
+
+`python main.py --env-type ml10-SD-LW`
+
+
+* To reproduce the result of variBAD and LDM,
+
+`python main.py --env-type ml10-VariBAD`
+
+`python main.py --env-type ml10-LDM`
+
+* To load and evaluate trained models,
+
+`python main.py --env-type ml10-eval --load-dir ... --load-iter ...`
+
+
+To run experiments on ML-45, replace the ml10 into ml45 for all commands above. 
+
+All the results will be logged at `logs/` folder.
+
+
 
 To reproduce results of RL2, MAML, and PEARL, use the [garage](https://github.com/rlworkgroup/garage/pull/2287) repository.
 
+You have to use the exact pull request used to report the results in the Meta-World paper.
 
 

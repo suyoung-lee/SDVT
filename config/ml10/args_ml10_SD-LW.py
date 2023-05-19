@@ -10,7 +10,7 @@ def get_args(rest_args):
     # training parameters
     parser.add_argument('--num_frames', type=int, default=35e7, help='number of frames to train')
     parser.add_argument('--max_rollouts_per_task', type=int, default=10)
-    parser.add_argument('--exp_label', default='VariBAD', help='label (typically name of method)')
+    parser.add_argument('--exp_label', default='SD-LW', help='label (typically name of method)')
     parser.add_argument('--env_name', default='ML10Env-v2', help='environment to train on')
 
     # --- POLICY ---
@@ -58,6 +58,7 @@ def get_args(rest_args):
     parser.add_argument('--ppo_use_huberloss', type=boolean_argument, default=True, help='use huberloss instead of MSE')
     parser.add_argument('--ppo_use_clipped_value_loss', type=boolean_argument, default=True, help='clip value loss')
     parser.add_argument('--ppo_clip_param', type=float, default=0.1, help='clamp param')
+    parser.add_argument('--ppo_disc',  type=boolean_argument, default=False, help='dimension-wise clipping')
 
     # other hyperparameters
     parser.add_argument('--lr_policy', type=float, default=7e-4, help='learning rate (default: 7e-4)')
@@ -82,7 +83,7 @@ def get_args(rest_args):
     parser.add_argument('--decoder_max_grad_norm', type=float, default=1.0, help='max norm of gradients')
 
     # --- VAE TRAINING ---
-    parser.add_argument('--dropout_rate', type=float, default=0.0, help='dropout rate for non-latent input of decoder')
+    parser.add_argument('--dropout_rate', type=float, default=0.7, help='dropout rate for non-latent input of decoder')
     # general
     parser.add_argument('--lr_vae', type=float, default=0.001)
     parser.add_argument('--size_vae_buffer', type=int, default=1000,
@@ -114,14 +115,19 @@ def get_args(rest_args):
                         help='split batches up by elbo term (to save memory of if ELBOs are of different length)')
 
     #Gaussian mixture
-    parser.add_argument('--vae_mixture_num', type=int, default=1,
+    parser.add_argument('--vae_mixture_num', type=int, default=5,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')
-    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
-                        help='how many mixture gaussian to use, 1 means unimodal')
+    parser.add_argument('--cat_loss_coeff', type=float, default=0.5,
+                        help='weight for the categorical loss')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')
+    parser.add_argument('--occ_loss_coeff', type=float, default=0.0, help='Occupancy regularization coefficient')
+    parser.add_argument('--occ_loss_type', type=str, default='exp',
+                        help='choose: '
+                             'linear' 'log' 'exp')
+
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
@@ -218,7 +224,7 @@ def get_args(rest_args):
 
     # --- Virtual ---
     parser.add_argument('--virtual_ratio', type=float, default=0.0, help='virtual training ratio')
-    parser.add_argument('--virtual_ratio_increment', type=float, default=0.05, help='virtual ratio increased per 100M steps')
+    parser.add_argument('--virtual_ratio_increment', type=float, default=0.0, help='virtual ratio increased per 100M steps')
     parser.add_argument('--num_virtual_skills', type=int, default=3)
     parser.add_argument('--include_smaller', type=boolean_argument, default=False,
                         help='allow smaller number of virtual skills')

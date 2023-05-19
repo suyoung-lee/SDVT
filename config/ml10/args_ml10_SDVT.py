@@ -115,21 +115,18 @@ def get_args(rest_args):
                         help='split batches up by elbo term (to save memory of if ELBOs are of different length)')
 
     #Gaussian mixture
-    parser.add_argument('--vae_mixture_num', type=int, default=5,
+    parser.add_argument('--vae_mixture_num', type=int, default=10,
                         help='how many mixture gaussian to use, 1 means unimodal')
     parser.add_argument('--gauss_loss_coeff', type=float, default=1.0,
                         help='when using Gaussian mixture')
-    parser.add_argument('--cat_loss_coeff', type=float, default=0.5,
-                        help='how many mixture gaussian to use, 1 means unimodal')
+    parser.add_argument('--cat_loss_coeff', type=float, default=1.0,
+                        help='weight for the categorical loss')
     parser.add_argument('--gumbel_temperature', type=float, default=1.0,
                         help='Gumbel softmax temperature, when nearly 0, hardmax')
-    parser.add_argument('--occ_loss_coeff', type=float, default=0.0, help='Occupancy regularization coefficient')
-    parser.add_argument('--occ_loss_type', type=str, default='linear',
+    parser.add_argument('--occ_loss_coeff', type=float, default=1.0, help='Occupancy regularization coefficient')
+    parser.add_argument('--occ_loss_type', type=str, default='exp',
                         help='choose: '
-                             'linear'
-                             'log'
-                             'exp'
-                        )
+                             'linear' 'log' 'exp')
 
     # - encoder
     parser.add_argument('--action_embedding_size', type=int, default=16)
@@ -216,7 +213,7 @@ def get_args(rest_args):
     parser.add_argument('--results_log_dir', default=None, help='directory to save results (None uses ./logs)')
     parser.add_argument('--render', type=boolean_argument, default=False,
                         help='render during eval')
-    parser.add_argument('--parametric_num', type=int, default=10, help='number of parametric variations for evaluation')
+    parser.add_argument('--parametric_num', type=int, default=50, help='number of parametric variations for evaluation')
 
     # general settings
     parser.add_argument('--seed',  nargs='+', type=int, default=[20])
