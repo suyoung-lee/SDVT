@@ -291,7 +291,6 @@ class MetaLearnerML10SDVT:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step, virtual)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
@@ -589,7 +588,6 @@ class MetaLearnerML10SDVT:
 
             for task_class in range(15):
                 for parametric_num in range(total_parametric_num // num_worker):
-                    #print(task_class, parametric_num)
                     task_list = np.concatenate((np.expand_dims(np.repeat(task_class, num_worker), axis=1),
                                                 np.expand_dims(np.arange(num_worker * parametric_num,
                                                                          num_worker * (parametric_num + 1)), axis=1)),axis=1)

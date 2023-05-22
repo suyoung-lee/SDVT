@@ -48,9 +48,9 @@ All the configuration files are in `config/` folder.
 
 * To run the lightweight version of our methods,
 
-`python main.py --env-type ml10-SDVT-LW`
+`python main.py --env-type ml10-SDVT_LW`
 
-`python main.py --env-type ml10-SD-LW`
+`python main.py --env-type ml10-SD_LW`
 
 
 * To reproduce the result of variBAD and LDM,

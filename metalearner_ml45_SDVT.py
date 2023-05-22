@@ -253,8 +253,6 @@ class MetaLearnerML45SDVT:
         self.iter_idx += 1 # number of interactions with the real environment
         self.virtual_iter_idx = self.iter_idx #total interactions including the virtual
         while self.iter_idx < self.num_updates:
-            if self.iter_idx%100==0:
-                print('iter: ', self.iter_idx)
             if random.random()<self.virtual_ratio: #this code is valid only when policy_num_steps == 5000
                 virtual = True
             else:
