@@ -10,7 +10,7 @@ import torch
 import json
 
 # get configs
-from config.ml10 import args_ml10_SD , args_ml10_SD_LW, args_ml10_SD, args_ml10_SD_LW, args_ml10_LDM, args_ml10_VariBAD
+from config.ml10 import args_ml10_SDVT , args_ml10_SDVT_LW, args_ml10_SD, args_ml10_SD_LW, args_ml10_LDM, args_ml10_VariBAD
 from config.ml45 import args_ml45_SDVT, args_ml45_SDVT_LW, args_ml45_SD, args_ml45_SD_LW, args_ml45_LDM, args_ml45_VariBAD
 from environments.parallel_envs import make_vec_envs
 from learner import Learner
@@ -37,9 +37,9 @@ def main():
                'ml45-SDVT', 'ml45-SDVT_LW', 'ml45-SD', 'ml45-SD_LW', 'ml45-LDM', 'ml45-VariBAD',]:
         if args.load_dir is None:
             if env == 'ml10-SDVT':
-                args = args_ml10_SD.get_args(rest_args)
-            elif env == 'ml10-SD_LW':
-                args = args_ml10_SD_LW.get_args(rest_args)
+                args = args_ml10_SDVT.get_args(rest_args)
+            elif env == 'ml10-SDVT_LW':
+                args = args_ml10_SDVT_LW.get_args(rest_args)
             elif env == 'ml10-SD':
                 args = args_ml10_SD.get_args(rest_args)
             elif env == 'ml10-SD_LW':
