@@ -6,21 +6,21 @@ Please do not distribute.
 
 
 ### Requirements
-Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad). 
+Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad) on Python 3.6. 
 
 Please refer to the `requirements.txt`
 
 `pip install -r requirements.txt`
 
-In addition to those requirements, you need to install [metaworld](https://github.com/Farama-Foundation/Metaworld) to run experiments on ML-10.
+In addition to those requirements, you need to install [metaworld](https://github.com/Farama-Foundation/Metaworld) to run experiments on ML-10 and ML-45.
 
     #IMPORTANT
     On May 9, 2023, there has been a large update in Meta-World, that includes changes in some tasks.
     It is recommended to use previous version of Meta-World
     to maintain consistency with previous works and to reproduce our results.
     
-    git clone https://github.com/rlworkgroup/metaworld.git
-    cd metaworld
+    git clone https://github.com/Farama-Foundation/Metaworld.git
+    cd Metaworld
     pip install -e .
     git reset --hard 04be337a12305e393c0caf0cbf5ec7755c7c8feb
 
@@ -31,6 +31,8 @@ The main parts of our implementations are at `metalearner_ml10_...py`, `metalear
 
 ### Reproducing the results
 All the configuration files are in `config/` folder.
+
+We use 8 seeds from 20 to 27 (written as Seed 0 to Seed 7 in the manuscript for brevity).
 
 * To run our SDVT algorithm on ML-10,
 

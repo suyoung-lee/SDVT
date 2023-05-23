@@ -10,8 +10,10 @@ import torch
 import json
 
 # get configs
-from config.ml10 import args_ml10_SDVT , args_ml10_SDVT_LW, args_ml10_SD, args_ml10_SD_LW, args_ml10_LDM, args_ml10_VariBAD
-from config.ml45 import args_ml45_SDVT, args_ml45_SDVT_LW, args_ml45_SD, args_ml45_SD_LW, args_ml45_LDM, args_ml45_VariBAD
+from config.ml10 import \
+    args_ml10_SDVT, args_ml10_SDVT_LW, args_ml10_SD, args_ml10_SD_LW, args_ml10_LDM, args_ml10_VariBAD
+from config.ml45 import \
+    args_ml45_SDVT, args_ml45_SDVT_LW, args_ml45_SD, args_ml45_SD_LW, args_ml45_LDM, args_ml45_VariBAD
 from environments.parallel_envs import make_vec_envs
 from learner import Learner
 from metalearner import MetaLearner
@@ -31,10 +33,9 @@ def main():
     parser.add_argument('--load-iter', default=None)
     args, rest_args = parser.parse_known_args()
     env = args.env_type
-
     # ml10
     if env in ['ml10-SDVT', 'ml10-SDVT_LW', 'ml10-SD', 'ml10-SD_LW', 'ml10-LDM', 'ml10-VariBAD',
-               'ml45-SDVT', 'ml45-SDVT_LW', 'ml45-SD', 'ml45-SD_LW', 'ml45-LDM', 'ml45-VariBAD',]:
+               'ml45-SDVT', 'ml45-SDVT_LW', 'ml45-SD', 'ml45-SD_LW', 'ml45-LDM', 'ml45-VariBAD']:
         if args.load_dir is None:
             if env == 'ml10-SDVT':
                 args = args_ml10_SDVT.get_args(rest_args)
@@ -119,11 +120,7 @@ def main():
         print('training', seed)
         args.seed = seed
         args.action_space = None
-
-        if env == 'ml10-SDVT':
-            args.results_log_dir = args.results_log_dir
-            learner = MetaLearnerML10SDVT(args)
-        elif env == 'ml10-SD':
+        if env in ['ml10-SDVT', 'ml10-SDVT_LW', 'ml10-SD', 'ml10-SD_LW']:
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10SDVT(args)
         elif env == 'ml10-VariBAD':
@@ -132,10 +129,7 @@ def main():
         elif env == 'ml10-LDM':
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML10LDM(args)
-        elif env == 'ml45-SDVT':
-            args.results_log_dir = args.results_log_dir
-            learner = MetaLearnerML45SDVT(args)
-        elif env == 'ml45-SD':
+        elif env in ['ml45-SDVT', 'ml45-SDVT_LW', 'ml45-SD', 'ml45-SD_LW']:
             args.results_log_dir = args.results_log_dir
             learner = MetaLearnerML45SDVT(args)
         elif env == 'ml45-VariBAD':

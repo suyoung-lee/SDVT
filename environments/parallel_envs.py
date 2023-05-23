@@ -19,7 +19,6 @@ def make_env(env_id, seed, rank, episodes_per_task, tasks, add_done_info, **kwar
             env = gym.make(env_id, SEED= seed, **kwargs)
         else:
             env = gym.make(env_id, **kwargs)
-
         if tasks is not None:
             env.unwrapped.reset_task = lambda x: env.unwrapped.set_task(random.choice(tasks))
         if seed is not None:
