@@ -16,10 +16,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class VaribadVAEMixtureExt:
     """
-    VAE of VariBAD:
-    - has an encoder and decoder
-    - can compute the ELBO loss
-    - can update the VAE (encoder+decoder)
+    GMVAE of SDVT:
+    - has an encoder (Gaussian mixture) and decoder
+    - can compute the ELBO loss (including categorical)
+    - can update the GMVAE (encoder+decoder)
+    - includes the dispersion layer
     """
 
     def __init__(self, args, logger, get_iter_idx):

@@ -253,7 +253,6 @@ class MetaLearnerML10LDM:
 
             # rollout policies for a few steps
             for step in range(self.args.policy_num_steps):
-                #print(self.iter_idx, step)
                 # sample actions from policy
                 with torch.no_grad():
                     value, action = utl.select_action(
