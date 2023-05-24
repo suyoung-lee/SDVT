@@ -1,3 +1,7 @@
+"""
+Parts related to Gaussian Mixture taken from https://github.com/jariasf/GMVAE
+"""
+
 import numpy as np
 
 import torch
@@ -7,7 +11,6 @@ from torch.nn import functional as F
 from utils import helpers as utl
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 class GumbelSoftmax(nn.Module):
 
     def __init__(self, f_dim, c_dim):
@@ -32,7 +35,6 @@ class GumbelSoftmax(nn.Module):
         input: [*, n_class]
         return: flatten --> [*, n_class] an one-hot vector
         """
-        # categorical_dim = 10
         y = self.gumbel_softmax_sample(logits, temperature)
 
         if not hard:
@@ -187,7 +189,6 @@ class RNNEncoder_mixture_ext(nn.Module):
         mu, var, z = self.qzxy(h_reshaped, y) #procsx5 or (5000batchsize)xlatent_dim
 
         #return latent_sample, latent_mean, latent_logvar, hidden_state
-        #print('prior_mixture', y.size(), z.size(), mu.size(), var.size())
         return y, z, mu, var, logits, prob, hidden_state
 
 

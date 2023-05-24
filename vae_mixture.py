@@ -203,7 +203,7 @@ class VaribadVAEMixture:
         """occupancy loss to suppress usage of larger subtask index
             loss = logK * (1/f(K)) * -Σ (1,...,f(K)) dot y for linear
         Args:
-            y: sampled categorical
+            y: sampled subtask composition
         args.type: How f(K) is defined, linear square, or exponential
         maximum is set as log(K) to match magnitude of the entropy loss
         """

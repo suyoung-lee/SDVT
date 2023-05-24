@@ -109,9 +109,6 @@ class OnlineStorage(object):
 
         self.to_device()
 
-        #print('init prob ', self.prob)
-        #print('init latent mean', self.latent_mean)
-
     def to_device(self):
         if self.args.pass_state_to_policy:
             self.prev_state = self.prev_state.to(device)
@@ -171,9 +168,6 @@ class OnlineStorage(object):
                latent_pol=None,
                hidden_states_pol=None
                ):
-        #print('self.prob 1', self.prob)
-        #print('self.latent_mean 1 ', self.latent_mean)
-        #print("online storage 1 prob size {}, latent mean size {}: ".format(len(self.prob), len(self.latent_mean)))
         self.prev_state[self.step + 1].copy_(state)
         if self.args.pass_belief_to_policy:
             self.beliefs[self.step + 1].copy_(belief)
@@ -192,9 +186,7 @@ class OnlineStorage(object):
                 #self.logits.append(logits.detach().clone())#
                 #self.prob[self.step + 1].copy_(prob.detach().clone())
                 self.prob.append(prob.detach().clone())
-                #print('self.prob', self.prob)
-                #print('self.latent_mean', self.latent_mean)
-                #print("online storage prob size {}, latent mean size {}: ".format(len(self.prob), len(self.latent_mean)))
+
         if self.policy_separate_gru:
             self.latent_pol.append(latent_pol.detach().clone())
             self.hidden_states_pol[self.step + 1].copy_(hidden_states_pol.detach())
@@ -303,8 +295,6 @@ class OnlineStorage(object):
         else:
             latent_pol = None
 
-        #print('latent_mean size', torch.stack(self.latent_mean[:-1]).size())
-        #print('prob size', prob.size())
         _, action_log_probs, _ = policy.evaluate_actions(self.prev_state[:-1],
                                                          latent,
                                                          self.beliefs[:-1] if self.beliefs is not None else None,
@@ -372,9 +362,6 @@ class OnlineStorage(object):
                 adv_targ = None
             else:
                 adv_targ = advantages.reshape(-1, 1)[indices]
-
-            #print('latent sample batch:', latent_sample_batch)
-            #print('prob batch:', prob_batch)
 
             yield state_batch, belief_batch, task_batch, prob_batch, latent_pol_batch,\
                   actions_batch, \

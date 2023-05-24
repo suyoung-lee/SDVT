@@ -159,7 +159,7 @@ def evaluate_metaworld(args,
     state, belief, task = utl.reset_env(envs, args)
     envs.reset_task(task_list)
     state2= torch.from_numpy(envs._get_obs()).float().to(device)
-    state[:,:39] = state2.clone()
+    state[:,:39] = state2.clone() #varibad wrapper has one more 'done' dimension
 
     # this counts how often an agent has done the same task already
     task_count = torch.zeros(num_processes).long().to(device)
