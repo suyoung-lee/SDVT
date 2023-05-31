@@ -44,7 +44,6 @@ class MetaEvalML10:
         self.num_updates = int(args.num_frames) // args.policy_num_steps // args.num_processes
         self.frames = 0
         self.iter_idx = -1
-        self.task_count = np.zeros((self.args.num_processes))
         self.return_list = torch.zeros((self.args.num_processes)).to(device)
 
         # initialise tensorboard logger
@@ -259,24 +258,24 @@ class MetaEvalML10:
             total_parametric_num = self.args.parametric_num
 
             num_worker = 10
-            returns_array = np.zeros((50, total_parametric_num, self.args.max_rollouts_per_task))
-            latent_means_array = np.zeros((50, total_parametric_num, self.args.latent_dim))
-            latent_logvars_array = np.zeros((50, total_parametric_num, self.args.latent_dim))
+            returns_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))
+            latent_means_array = np.zeros((15, total_parametric_num, self.args.latent_dim))
+            latent_logvars_array = np.zeros((15, total_parametric_num, self.args.latent_dim))
 
-            successes_array = np.zeros((50, total_parametric_num))
+            successes_array = np.zeros((15, total_parametric_num))
             save_episode_successes = True
             if save_episode_successes:
-                episode_successes_array = np.zeros((50, total_parametric_num, self.args.max_rollouts_per_task))
+                episode_successes_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task))
 
             save_episode_probs = False
 
             #save_episode_probs = (self.iter_idx + 1) % (20 * self.args.eval_interval) == 0
-            probs_array = np.zeros((50, total_parametric_num, self.args.vae_mixture_num))
+            probs_array = np.zeros((15, total_parametric_num, self.args.vae_mixture_num))
             if save_episode_probs:
-                episode_probs_array = np.zeros((50, total_parametric_num, self.args.max_rollouts_per_task,
+                episode_probs_array = np.zeros((15, total_parametric_num, self.args.max_rollouts_per_task,
                                                 self.envs._max_episode_steps, self.args.vae_mixture_num))
 
-            for task_class in range(50):
+            for task_class in range(15):
                 print(self.iter_idx, task_class)
                 for parametric_num in range(total_parametric_num // num_worker):
                     task_list = np.concatenate((np.expand_dims(np.repeat(task_class, num_worker), axis=1),
@@ -315,20 +314,19 @@ class MetaEvalML10:
             print(f"Updates {self.iter_idx}, "
                   f"Frames {self.frames}, "
                   f"FPS {int(self.frames / (time.time() - start_time))}, \n"
-                  f" Mean return per episode (train): {np.mean(taskwise_mean_return[:45])},"
-                  f" Mean return per episode (test): {np.mean(taskwise_mean_return[45:])},\n"
-                  f" Mean final return per episode (train): {np.mean(taskwise_mean_final_return[:45])},"
-                  f" Mean final return per episode (test): {np.mean(taskwise_mean_final_return[45:])},\n"
-                  f" Mean success rate (train): {np.mean(taskwise_mean_success[:45])},"
-                  f" Mean final success rate (train): {np.mean(taskwise_mean_final_success[:45])},\n"
-                  f" Mean success rate (test): {np.mean(taskwise_mean_success[45:])}"
-                  f" Mean final success rate (test): {np.mean(taskwise_mean_final_success[45:])}"
+                  f" Mean return per episode (train): {np.mean(taskwise_mean_return[:10])},"
+                  f" Mean return per episode (test): {np.mean(taskwise_mean_return[10:])},\n"
+                  f" Mean final return per episode (train): {np.mean(taskwise_mean_final_return[:10])},"
+                  f" Mean final return per episode (test): {np.mean(taskwise_mean_final_return[10:])},\n"
+                  f" Mean success rate (train): {np.mean(taskwise_mean_success[:10])},"
+                  f" Mean final success rate (train): {np.mean(taskwise_mean_final_success[:10])},\n"
+                  f" Mean success rate (test): {np.mean(taskwise_mean_success[10:])}"
+                  f" Mean final success rate (test): {np.mean(taskwise_mean_final_success[10:])}"
                   )
-            print("history: ", self.task_count)
-            print("train taskwise success rates: ", taskwise_mean_success[:45])
-            print("train taskwise final success rates: ", taskwise_mean_final_success[:45])
-            print("test taskwise success rates: ", taskwise_mean_success[45:])
-            print("test taskwise final success rates: ", taskwise_mean_final_success[45:])
+            print("train taskwise success rates: ", taskwise_mean_success[:10])
+            print("train taskwise final success rates: ", taskwise_mean_final_success[:10])
+            print("test taskwise success rates: ", taskwise_mean_success[10:])
+            print("test taskwise final success rates: ", taskwise_mean_final_success[10:])
 
             with open(self.logger.full_output_folder + '/log_eval.csv', 'a', encoding='UTF8') as f:
                 writer = csv.writer(f)
@@ -339,7 +337,6 @@ class MetaEvalML10:
             np.save('{}/{}/latent_logvars.npy'.format(self.logger.full_output_folder, self.iter_idx),
                     latent_logvars_array)
             np.save('{}/{}/successes.npy'.format(self.logger.full_output_folder, self.iter_idx), successes_array)
-            np.save('{}/{}/task_count.npy'.format(self.logger.full_output_folder, self.iter_idx), self.task_count)
             if save_episode_successes:
                 np.save('{}/{}/episode_successes_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                         episode_successes_array)
@@ -348,4 +345,3 @@ class MetaEvalML10:
             if save_episode_probs:
                 np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                         episode_probs_array)
-            self.task_count = np.zeros(45)

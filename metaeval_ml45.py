@@ -44,7 +44,6 @@ class MetaEvalML45:
         self.num_updates = int(args.num_frames) // args.policy_num_steps // args.num_processes
         self.frames = 0
         self.iter_idx = -1
-        self.task_count = np.zeros((self.args.num_processes))
         self.return_list = torch.zeros((self.args.num_processes)).to(device)
 
         # initialise tensorboard logger
@@ -324,7 +323,6 @@ class MetaEvalML45:
                   f" Mean success rate (test): {np.mean(taskwise_mean_success[45:])}"
                   f" Mean final success rate (test): {np.mean(taskwise_mean_final_success[45:])}"
                   )
-            print("history: ", self.task_count)
             print("train taskwise success rates: ", taskwise_mean_success[:45])
             print("train taskwise final success rates: ", taskwise_mean_final_success[:45])
             print("test taskwise success rates: ", taskwise_mean_success[45:])
@@ -339,7 +337,6 @@ class MetaEvalML45:
             np.save('{}/{}/latent_logvars.npy'.format(self.logger.full_output_folder, self.iter_idx),
                     latent_logvars_array)
             np.save('{}/{}/successes.npy'.format(self.logger.full_output_folder, self.iter_idx), successes_array)
-            np.save('{}/{}/task_count.npy'.format(self.logger.full_output_folder, self.iter_idx), self.task_count)
             if save_episode_successes:
                 np.save('{}/{}/episode_successes_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                         episode_successes_array)
@@ -348,4 +345,3 @@ class MetaEvalML45:
             if save_episode_probs:
                 np.save('{}/{}/episode_probs_array.npy'.format(self.logger.full_output_folder, self.iter_idx),
                         episode_probs_array)
-            self.task_count = np.zeros(45)
