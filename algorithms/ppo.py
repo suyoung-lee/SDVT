@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 import time
 
+
 from utils import helpers as utl
 
 
@@ -27,6 +28,7 @@ class PPO:
                  eps=None,
                  use_huber_loss=True,
                  use_clipped_value_loss=True,
+                 grad_correction=None,
                  ):
         self.args = args
 
@@ -44,12 +46,19 @@ class PPO:
         self.use_huber_loss = use_huber_loss
 
         self.policy_separate_gru = self.args.policy_separate_gru
+        self.grad_correction = grad_correction
+
 
         # optimiser
         if policy_optimiser == 'adam':
             self.optimiser = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
         elif policy_optimiser == 'rmsprop':
             self.optimiser = optim.RMSprop(actor_critic.parameters(), lr=lr, eps=eps, alpha=0.99)
+
+        if self.grad_correction == 'pcgrad':
+            from weighting.pcgrad import PCGrad
+            self.optimiser_pcgrad = PCGrad(self.optimiser)
+
         self.optimiser_vae = optimiser_vae
         self.optimiser_encoder_pol = optimiser_encoder_pol
 
@@ -106,7 +115,11 @@ class PPO:
         loss_epoch = 0
         for e in range(self.ppo_epoch):
             #print('ppo epoch: ', e)
-            data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
+            if self.grad_correction == 'none':
+                data_generator = policy_storage.feed_forward_generator(advantages, self.num_mini_batch)
+            else:
+                data_generator = policy_storage.feed_forward_generator_uniform(advantages, self.num_mini_batch)
+
             for sample in data_generator:
 
                 state_batch, belief_batch, task_batch, prob_batch, latent_pol_batch,\
@@ -128,21 +141,24 @@ class PPO:
                                                          )
 
                 # Reshape to do in a single forward pass for all steps
-                values, action_log_probs, dist_entropy = \
+                values, action_log_probs, dist_entropy_ew, dist_entropy = \
                     self.actor_critic.evaluate_actions(state=state_batch, latent=latent_batch,
                                                        belief=belief_batch, task=task_batch, prob=prob_batch,latent_pol = latent_pol_batch,
-                                                       action=actions_batch)
+                                                       action=actions_batch, entropy_mean = False)
+
                 ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
                 surr1 = ratio * adv_targ
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv_targ
-                action_loss = -torch.min(surr1, surr2).mean()
+                action_loss = -torch.min(surr1, surr2)
+                action_loss_ew = action_loss.mean() #equal weighting
 
                 if self.use_huber_loss and self.use_clipped_value_loss:
                     value_pred_clipped = value_preds_batch + (values - value_preds_batch).clamp(-self.clip_param,
                                                                                                 self.clip_param)
                     value_losses = F.smooth_l1_loss(values, return_batch, reduction='none')
                     value_losses_clipped = F.smooth_l1_loss(value_pred_clipped, return_batch, reduction='none')
-                    value_loss = 0.5 * torch.max(value_losses, value_losses_clipped).mean()
+                    value_loss = 0.5 * torch.max(value_losses, value_losses_clipped)
+
                 elif self.use_huber_loss:
                     value_loss = F.smooth_l1_loss(values, return_batch)
                 elif self.use_clipped_value_loss:
@@ -150,57 +166,78 @@ class PPO:
                                                                                                 self.clip_param)
                     value_losses = (values - return_batch).pow(2)
                     value_losses_clipped = (value_pred_clipped - return_batch).pow(2)
-                    value_loss = 0.5 * torch.max(value_losses, value_losses_clipped).mean()
+                    value_loss = 0.5 * torch.max(value_losses, value_losses_clipped)
                 else:
-                    value_loss = 0.5 * (return_batch - values).pow(2).mean()
+                    value_loss = 0.5 * (return_batch - values).pow(2)
+                value_loss_ew = value_loss.mean() #equal weighting
 
-                # zero out the gradients
-                self.optimiser.zero_grad()
-                if rlloss_through_encoder:
-                    self.optimiser_vae.zero_grad()
-                if policy_separate_gru:
-                    self.optimiser_encoder_pol.zero_grad()
+                if self.grad_correction == 'none':
+                    # zero out the gradients
+                    self.optimiser.zero_grad()
+                    if rlloss_through_encoder:
+                        self.optimiser_vae.zero_grad()
+                    if policy_separate_gru:
+                        self.optimiser_encoder_pol.zero_grad()
 
-                # compute policy loss and backprop
-                loss = value_loss * self.value_loss_coef + action_loss - dist_entropy * self.entropy_coef
+                    # compute policy loss and backprop
+                    loss = value_loss_ew * self.value_loss_coef + action_loss_ew - dist_entropy_ew * self.entropy_coef
 
-                # compute vae loss and backprop
-                if rlloss_through_encoder:
-                    loss += self.args.vae_loss_coeff * compute_vae_loss()
+                    # compute vae loss and backprop
+                    if rlloss_through_encoder:
+                        loss += self.args.vae_loss_coeff * compute_vae_loss()
 
-                # compute gradients (will attach to all networks involved in this computation)
-                loss.backward()
+                    # compute gradients (will attach to all networks involved in this computation)
+                    loss.backward()
 
-                # clip gradients
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
-                if rlloss_through_encoder:
-                    if self.args.encoder_max_grad_norm is not None:
-                        nn.utils.clip_grad_norm_(encoder.parameters(), self.args.encoder_max_grad_norm)
-                if policy_separate_gru:
-                    if self.args.encoder_max_grad_norm is not None:
-                        nn.utils.clip_grad_norm_(encoder_pol.parameters(), self.args.encoder_max_grad_norm)
+                    # clip gradients
+                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
+                    if rlloss_through_encoder:
+                        if self.args.encoder_max_grad_norm is not None:
+                            nn.utils.clip_grad_norm_(encoder.parameters(), self.args.encoder_max_grad_norm)
+                    if policy_separate_gru:
+                        if self.args.encoder_max_grad_norm is not None:
+                            nn.utils.clip_grad_norm_(encoder_pol.parameters(), self.args.encoder_max_grad_norm)
 
-                # update
-                self.optimiser.step()
-                if rlloss_through_encoder:
-                    self.optimiser_vae.step()
-                if policy_separate_gru:
-                    self.optimiser_encoder_pol.step()
+                    # update
+                    self.optimiser.step()
+                    if rlloss_through_encoder:
+                        self.optimiser_vae.step()
+                    if policy_separate_gru:
+                        self.optimiser_encoder_pol.step()
 
-                value_loss_epoch += value_loss.item()
-                action_loss_epoch += action_loss.item()
-                dist_entropy_epoch += dist_entropy.item()
-                loss_epoch += loss.item()
+                    value_loss_epoch += value_loss_ew.item()
+                    action_loss_epoch += action_loss_ew.item()
+                    dist_entropy_epoch += dist_entropy_ew.item()
+                    loss_epoch += loss.item()
 
-                if rlloss_through_encoder:
-                    # recompute embeddings (to build computation graph)
-                    utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
-                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
-                                             policy_separate_gru = False)
-                elif policy_separate_gru:
-                    utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=e + 1,
-                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
-                                             policy_separate_gru = True)
+                    if rlloss_through_encoder:
+                        # recompute embeddings (to build computation graph)
+                        utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
+                                                 detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
+                                                 policy_separate_gru = False)
+                    elif policy_separate_gru:
+                        utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=e + 1,
+                                                 detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
+                                                 policy_separate_gru = True)
+
+                elif self.grad_correction == 'pcgrad ':
+                    #self.optimiser_pcgrad.zero_grad()
+                    losses = []
+                    samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
+                    for proc in range(self.args.num_processes):
+                        loss_range = range(samplers_per_proc*proc,samplers_per_proc*(proc+1))
+                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + action_loss[loss_range].mean() - dist_entropy[loss_range].mean() * self.entropy_coef
+                        losses.append(proc_loss)
+                    #print('losses', losses)
+                    self.optimiser_pcgrad.pc_backward(losses)
+                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
+                    self.optimiser_pcgrad.step()
+
+                    value_loss_epoch += value_loss_ew.item()
+                    action_loss_epoch += action_loss_ew.item()
+                    dist_entropy_epoch += dist_entropy_ew.item()
+                    loss_epoch += sum(losses).item()/self.args.num_processes
+
 
         if (not rlloss_through_encoder) and (self.optimiser_vae is not None):
             for _ in range(self.args.num_vae_updates):

@@ -5,7 +5,7 @@ Used for on-policy rollout storages.
 """
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-
+import numpy as np
 from utils import helpers as utl
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -363,6 +363,76 @@ class OnlineStorage(object):
             else:
                 adv_targ = advantages.reshape(-1, 1)[indices]
 
+            yield state_batch, belief_batch, task_batch, prob_batch, latent_pol_batch,\
+                  actions_batch, \
+                  latent_sample_batch, latent_mean_batch, latent_logvar_batch, \
+                  value_preds_batch, return_batch, old_action_log_probs_batch, adv_targ
+
+    def feed_forward_generator_uniform(self,
+                               advantages,
+                               num_mini_batch=None,
+                               mini_batch_size=None):
+        num_steps, num_processes = self.rewards_raw.size()[0:2]
+        batch_size = num_processes * num_steps # 10 * 5000
+        procwise_minibatch_size = num_steps // num_mini_batch # 5000//10
+
+        if mini_batch_size is None:
+            assert batch_size >= num_mini_batch, (
+                "PPO requires the number of processes ({}) "
+                "* number of steps ({}) = {} "
+                "to be greater than or equal to the number of PPO mini batches ({})."
+                "".format(num_processes, num_steps, num_processes * num_steps,
+                          num_mini_batch))
+            mini_batch_size = batch_size // num_mini_batch
+
+        procwise_indices = np.zeros((num_processes, num_steps)) #10 * 500
+        # permute 5000 steps for each process (Task) then adjust the index
+        for proc in range(num_processes):
+            procwise_indices[proc] = num_processes * np.random.permutation(num_steps) + proc
+
+        for minbat in range(num_mini_batch):
+            indices = procwise_indices[:, procwise_minibatch_size * minbat: procwise_minibatch_size * (minbat+1)] #  500*10
+            #print('indices', indices)
+            indices = indices.flatten()
+            if self.args.pass_state_to_policy:
+                state_batch = self.prev_state[:-1].reshape(-1, *self.prev_state.size()[2:])[indices] #5001*10*40 -> 5000*10*40 -> 50000 * 40 -> (sample) 5000 * 40
+            else:
+                state_batch = None
+            if self.args.pass_latent_to_policy:
+                latent_sample_batch = torch.cat(self.latent_samples[:-1])[indices]
+                latent_mean_batch = torch.cat(self.latent_mean[:-1])[indices]
+                latent_logvar_batch = torch.cat(self.latent_logvar[:-1])[indices]
+            else:
+                latent_sample_batch = latent_mean_batch = latent_logvar_batch = None
+            if self.args.pass_prob_to_policy:
+                prob_batch = torch.cat(self.prob[:-1])[indices]
+            else:
+                prob_batch = None
+            if self.args.pass_belief_to_policy:
+                belief_batch = self.beliefs[:-1].reshape(-1, *self.beliefs.size()[2:])[indices]
+            else:
+                belief_batch = None
+            if self.args.pass_task_to_policy:
+                task_batch = self.tasks[:-1].reshape(-1, *self.tasks.size()[2:])[indices]
+            else:
+                task_batch = None
+            if self.policy_separate_gru:
+                latent_pol_batch = torch.cat(self.latent_pol[:-1])[indices]
+            else:
+                latent_pol_batch = None
+
+            actions_batch = self.actions.reshape(-1, self.actions.size(-1))[indices]
+
+            value_preds_batch = self.value_preds[:-1].reshape(-1, 1)[indices]
+            return_batch = self.returns[:-1].reshape(-1, 1)[indices]
+
+            old_action_log_probs_batch = self.action_log_probs.reshape(-1, 1)[indices]
+            if advantages is None:
+                adv_targ = None
+            else:
+                adv_targ = advantages.reshape(-1, 1)[indices]
+
+            #return batch in the order of tasks
             yield state_batch, belief_batch, task_batch, prob_batch, latent_pol_batch,\
                   actions_batch, \
                   latent_sample_batch, latent_mean_batch, latent_logvar_batch, \

@@ -1,8 +1,8 @@
-numpy==1.18.1
-torch==1.5.1
-torchvision==0.6.1
-gym==0.17.2
+numpy==1.24.3
+torch==1.7.1+cu110
+torchvision==0.8.2+cu110
+gym==0.21.0
 seaborn
-
-# only for the mujoco environments
+tensorboard
+opencv-python
 mujoco-py==2.0.2.10

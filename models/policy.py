@@ -281,7 +281,7 @@ class Policy(nn.Module):
             self.latent_pol_rms.update(torch.cat(policy_storage.latent_pol[:-1]))
 
 
-    def evaluate_actions(self, state, latent, belief, task, prob, latent_pol, action):
+    def evaluate_actions(self, state, latent, belief, task, prob, latent_pol, action, entropy_mean = True):
 
         value, actor_features = self.forward(state, latent, belief, task, prob, latent_pol)
         dist = self.dist(actor_features)
@@ -293,12 +293,15 @@ class Policy(nn.Module):
             # empirical entropy
             # dist_entropy = -action_log_probs.mean()
             # entropy of underlying dist (isn't correct but works well in practice)
-            dist_entropy = dist.base_dist.entropy().mean()
+            dist_entropy = dist.base_dist.entropy()
         else:
             action_log_probs = dist.log_probs(action)
-            dist_entropy = dist.entropy().mean()
+            dist_entropy = dist.entropy()
 
-        return value, action_log_probs, dist_entropy
+        if entropy_mean:
+            return value, action_log_probs, dist_entropy.mean()
+        else:
+            return value, action_log_probs, dist_entropy.mean(), dist_entropy
 
 
 FixedCategorical = torch.distributions.Categorical

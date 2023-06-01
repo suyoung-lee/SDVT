@@ -177,6 +177,7 @@ class MetaLearnerML45VariBAD:
                 use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
+                grad_correction=self.args.grad_correction
             )
         else:
             raise NotImplementedError
@@ -414,6 +415,7 @@ class MetaLearnerML45VariBAD:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
+        #if 0:
         if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
