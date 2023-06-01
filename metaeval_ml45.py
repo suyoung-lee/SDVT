@@ -211,7 +211,7 @@ class MetaEvalML45:
         if self.args.load_iter is None:
             iter_scope = np.arange(-1, 8000, 1000)
         else:
-            iter_scope = [self.args.load_iter]
+            iter_scope = [int(self.args.load_iter)]
         for iter_idx in iter_scope:
             self.frames = (iter_idx + 1) * self.args.policy_num_steps * self.args.num_processes
             self.iter_idx = iter_idx

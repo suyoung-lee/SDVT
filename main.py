@@ -29,9 +29,10 @@ from metaeval_ml45 import MetaEvalML45
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env-type', default='gridworld_varibad')
+    parser.add_argument('--env-type', default='ml10-SDVT')
     parser.add_argument('--load-dir', default=None)
     parser.add_argument('--load-iter', default=None)
+    parser.add_argument('--render', default=False)
     args, rest_args = parser.parse_known_args()
     env = args.env_type
     # ml10
@@ -67,7 +68,7 @@ def main():
         else:
             load_dir = args.load_dir
             load_iter = args.load_iter
-            with open(load_dir + 'config.json', 'r') as f:
+            with open(load_dir + '/config.json', 'r') as f:
                 args.__dict__ = json.load(f)
             args.load_dir = load_dir
             args.load_iter = load_iter
@@ -75,10 +76,12 @@ def main():
     elif env in ['ml10-eval', 'ml45-eval']:
         load_dir = args.load_dir
         load_iter = args.load_iter
-        with open(load_dir + 'config.json', 'r') as f:
+        render = args.render
+        with open(load_dir + '/config.json', 'r') as f:
             args.__dict__ = json.load(f)
         args.load_dir = load_dir
         args.load_iter = load_iter
+        args.render = render
         print(args)
     else:
         raise Exception("Invalid Environment")

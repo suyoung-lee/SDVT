@@ -226,7 +226,9 @@ class PPO:
                     samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
                     for proc in range(self.args.num_processes):
                         loss_range = range(samplers_per_proc*proc,samplers_per_proc*(proc+1))
-                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + action_loss[loss_range].mean() - dist_entropy[loss_range].mean() * self.entropy_coef
+                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + \
+                                    action_loss[loss_range].mean() - \
+                                    dist_entropy[loss_range].mean() * self.entropy_coef
                         losses.append(proc_loss)
                     #print('losses', losses)
                     self.optimiser_pcgrad.pc_backward(losses)
