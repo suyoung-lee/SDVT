@@ -415,9 +415,7 @@ class MetaLearnerML45VariBAD:
         # --- visualise behaviour of policy ---
 
         # --- evaluate policy ----
-        #if 0:
-        if self.iter_idx>0 and ((self.iter_idx + 1) % self.args.eval_interval == 0):
-        #if (self.iter_idx + 1) % self.args.eval_interval == 0:
+        if (self.iter_idx + 1) % self.args.eval_interval == 0:
             os.makedirs('{}/{}'.format(self.logger.full_output_folder, self.iter_idx))
             ret_rms = None #we don't need normalised reward for eval
             total_parametric_num = self.args.parametric_num

@@ -327,6 +327,8 @@ class MetaEvalML45:
             print("train taskwise final success rates: ", taskwise_mean_final_success[:45])
             print("test taskwise success rates: ", taskwise_mean_success[45:])
             print("test taskwise final success rates: ", taskwise_mean_final_success[45:])
+            print('argmax for each task: ', np.argmax(returns_array[:,:,-1], axis=1))
+            print('maximum for each task: ', np.max(returns_array[:,:,-1], axis=1))
 
             with open(self.logger.full_output_folder + '/log_eval.csv', 'a', encoding='UTF8') as f:
                 writer = csv.writer(f)

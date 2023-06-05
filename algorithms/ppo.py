@@ -220,7 +220,7 @@ class PPO:
                                                  detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
                                                  policy_separate_gru = True)
 
-                elif self.grad_correction == 'pcgrad ':
+                elif self.grad_correction == 'pcgrad':
                     #self.optimiser_pcgrad.zero_grad()
                     losses = []
                     samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
