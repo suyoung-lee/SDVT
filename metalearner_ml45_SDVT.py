@@ -192,6 +192,7 @@ class MetaLearnerML45SDVT:
                 use_clipped_value_loss=self.args.ppo_use_clipped_value_loss,
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
+                grad_correction=self.args.grad_correction
             )
         else:
             raise NotImplementedError

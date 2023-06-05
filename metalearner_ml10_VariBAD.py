@@ -186,6 +186,7 @@ class MetaLearnerML10VariBAD:
                 clip_param=self.args.ppo_clip_param,
                 optimiser_vae=self.vae.optimiser_vae,
                 optimiser_encoder_pol=self.encoder_pol.optimiser_vae if self.encoder_pol is not None else None,
+                grad_correction=self.args.grad_correction
             )
         else:
             raise NotImplementedError
