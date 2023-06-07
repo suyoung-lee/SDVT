@@ -6,7 +6,7 @@ Please do not distribute.
 
 
 ### Requirements
-Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad) on Python 3.6. 
+Our code is based on the implementation of [VariBAD](https://github.com/lmzintgraf/varibad) on Python 3.9. 
 
 Please refer to the `requirements.txt`
 

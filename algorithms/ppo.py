@@ -28,7 +28,7 @@ class PPO:
                  eps=None,
                  use_huber_loss=True,
                  use_clipped_value_loss=True,
-                 grad_correction=None,
+                 grad_correction='none',
                  ):
         self.args = args
 
