@@ -58,6 +58,9 @@ class PPO:
         if self.grad_correction == 'pcgrad':
             from weighting.pcgrad import PCGrad
             self.optimiser_pcgrad = PCGrad(self.optimiser)
+        elif self.grad_correction == 'cagrad':
+            from weighting.cagrad import CAGrad
+            self.optimiser_cagrad = CAGrad(self.optimiser)
 
         self.optimiser_vae = optimiser_vae
         self.optimiser_encoder_pol = optimiser_encoder_pol
@@ -205,20 +208,7 @@ class PPO:
                     if policy_separate_gru:
                         self.optimiser_encoder_pol.step()
 
-                    value_loss_epoch += value_loss_ew.item()
-                    action_loss_epoch += action_loss_ew.item()
-                    dist_entropy_epoch += dist_entropy_ew.item()
                     loss_epoch += loss.item()
-
-                    if rlloss_through_encoder:
-                        # recompute embeddings (to build computation graph)
-                        utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
-                                                 detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
-                                                 policy_separate_gru = False)
-                    elif policy_separate_gru:
-                        utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=e + 1,
-                                                 detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
-                                                 policy_separate_gru = True)
 
                 elif self.grad_correction == 'pcgrad':
                     #self.optimiser_pcgrad.zero_grad()
@@ -235,11 +225,38 @@ class PPO:
                     nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
                     self.optimiser_pcgrad.step()
 
-                    value_loss_epoch += value_loss_ew.item()
-                    action_loss_epoch += action_loss_ew.item()
-                    dist_entropy_epoch += dist_entropy_ew.item()
                     loss_epoch += sum(losses).item()/self.args.num_processes
 
+                elif self.grad_correction == 'cagrad':
+                    #self.optimiser_cagrad.zero_grad()
+                    losses = []
+                    samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
+                    for proc in range(self.args.num_processes):
+                        loss_range = range(samplers_per_proc*proc,samplers_per_proc*(proc+1))
+                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + \
+                                    action_loss[loss_range].mean() - \
+                                    dist_entropy[loss_range].mean() * self.entropy_coef
+                        losses.append(proc_loss)
+                    #print('losses', losses)
+                    self.optimiser_cagrad.pc_backward(losses)
+                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
+                    self.optimiser_cagrad.step()
+
+                    loss_epoch += sum(losses).item()/self.args.num_processes
+
+                value_loss_epoch += value_loss_ew.item()
+                action_loss_epoch += action_loss_ew.item()
+                dist_entropy_epoch += dist_entropy_ew.item()
+
+                if rlloss_through_encoder:
+                    # recompute embeddings (to build computation graph)
+                    utl.recompute_embeddings(policy_storage, encoder, sample=False, update_idx=e + 1,
+                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None, mixture=self.args.vae_mixture_num>1,
+                                             policy_separate_gru = False)
+                elif policy_separate_gru:
+                    utl.recompute_embeddings(policy_storage, encoder_pol, sample=False, update_idx=e + 1,
+                                             detach_every=self.args.tbptt_stepsize if hasattr(self.args, 'tbptt_stepsize') else None,
+                                             policy_separate_gru = True)
 
         if (not rlloss_through_encoder) and (self.optimiser_vae is not None):
             for _ in range(self.args.num_vae_updates):
