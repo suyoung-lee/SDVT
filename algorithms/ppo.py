@@ -238,7 +238,7 @@ class PPO:
                                     dist_entropy[loss_range].mean() * self.entropy_coef
                         losses.append(proc_loss)
                     #print('losses', losses)
-                    self.optimiser_cagrad.pc_backward(losses)
+                    self.optimiser_cagrad.ca_backward(losses)
                     nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
                     self.optimiser_cagrad.step()
 

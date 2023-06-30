@@ -168,6 +168,7 @@ if __name__ == '__main__':
     x, y = torch.randn(2, 3), torch.randn(2, 4)
     net = TestNet()
     y_pred = net(x)
+
     pc_adam = PCGrad(optim.Adam(net.parameters()))
     pc_adam.zero_grad()
     loss1_fn, loss2_fn = nn.L1Loss(), nn.MSELoss()
