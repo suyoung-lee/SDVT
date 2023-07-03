@@ -320,7 +320,6 @@ class MetaLearnerML45VariBAD:
                                                   pretrain_index=self.iter_idx * self.args.num_vae_updates_per_pretrain + p)
                 # otherwise do the normal update (policy + vae)
                 else:
-
                     train_stats = self.update(state=prev_state,
                                               belief=belief,
                                               task=task,
@@ -328,7 +327,6 @@ class MetaLearnerML45VariBAD:
                                               latent_sample=latent_sample,
                                               latent_mean=latent_mean,
                                               latent_logvar=latent_logvar)
-
                     # log
                     run_stats = [action, self.policy_storage.action_log_probs, value]
 

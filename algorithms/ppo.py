@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import time
-
+from amtl.optim import * # for gradient manipulation
 
 from utils import helpers as utl
 
@@ -55,12 +55,11 @@ class PPO:
         elif policy_optimiser == 'rmsprop':
             self.optimiser = optim.RMSprop(actor_critic.parameters(), lr=lr, eps=eps, alpha=0.99)
 
-        if self.grad_correction == 'pcgrad':
-            from weighting.pcgrad import PCGrad
-            self.optimiser_pcgrad = PCGrad(self.optimiser)
-        elif self.grad_correction == 'cagrad':
-            from weighting.cagrad import CAGrad
-            self.optimiser_cagrad = CAGrad(self.optimiser)
+        if self.grad_correction != 'none':
+            if self.grad_correction == 'nash':
+                self.balancer = get_method(self.grad_correction, n_tasks = self.args.num_processes)
+            else:
+                self.balancer = get_method(self.grad_correction)
 
         self.optimiser_vae = optimiser_vae
         self.optimiser_encoder_pol = optimiser_encoder_pol
@@ -210,39 +209,27 @@ class PPO:
 
                     loss_epoch += loss.item()
 
-                elif self.grad_correction == 'pcgrad':
-                    #self.optimiser_pcgrad.zero_grad()
-                    losses = []
+                else: #pcgrad, cagrad...etc
+                    self.optimiser.zero_grad()
+
+                    losses = {}
                     samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
                     for proc in range(self.args.num_processes):
                         loss_range = range(samplers_per_proc*proc,samplers_per_proc*(proc+1))
                         proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + \
                                     action_loss[loss_range].mean() - \
                                     dist_entropy[loss_range].mean() * self.entropy_coef
-                        losses.append(proc_loss)
-                    #print('losses', losses)
-                    self.optimiser_pcgrad.pc_backward(losses)
-                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
-                    self.optimiser_pcgrad.step()
+                        losses[proc] = proc_loss
 
-                    loss_epoch += sum(losses).item()/self.args.num_processes
+                    ###RECOMPUTE GRADIENTS
+                    self.balancer.step(
+                        losses = losses,
+                        shared_params = list(self.actor_critic.parameters()),
+                        task_specific_params = None
+                    )
 
-                elif self.grad_correction == 'cagrad':
-                    #self.optimiser_cagrad.zero_grad()
-                    losses = []
-                    samplers_per_proc = policy_storage.num_steps // self.num_mini_batch
-                    for proc in range(self.args.num_processes):
-                        loss_range = range(samplers_per_proc*proc,samplers_per_proc*(proc+1))
-                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + \
-                                    action_loss[loss_range].mean() - \
-                                    dist_entropy[loss_range].mean() * self.entropy_coef
-                        losses.append(proc_loss)
-                    #print('losses', losses)
-                    self.optimiser_cagrad.ca_backward(losses)
-                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.args.policy_max_grad_norm)
-                    self.optimiser_cagrad.step()
-
-                    loss_epoch += sum(losses).item()/self.args.num_processes
+                    self.optimiser.step()
+                    loss_epoch += sum(losses.values()).item()/self.args.num_processes
 
                 value_loss_epoch += value_loss_ew.item()
                 action_loss_epoch += action_loss_ew.item()
