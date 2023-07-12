@@ -8,7 +8,7 @@ import time
 from amtl.optim import * # for gradient manipulation
 
 from utils import helpers as utl
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class PPO:
     def __init__(self,
@@ -208,6 +208,40 @@ class PPO:
                         self.optimiser_encoder_pol.step()
 
                     loss_epoch += loss.item()
+
+                elif self.args.vae_mixture_num>1 and self.args.task_identification=='argmax':
+                    n=self.args.vae_mixture_num
+                    subtask_indices = torch.argmax(prob_batch, dim=1)
+                    mask = subtask_indices.unsqueeze(-1)==torch.arange(n).to(device)
+                    #print('mask:', mask)
+                    indices_dict =  {i: mask[:, i].nonzero() for i in range(n)}
+                    #print('indices_dict:', indices_dict)
+                    active_indices = []
+                    for i in range(n):
+                        if len(indices_dict[i]) != 0:  # Check if the element exists in the tensor
+                            active_indices.append(i)
+
+                    self.optimiser.zero_grad()
+                    #print('active_indices: ', active_indices)
+                    losses = {}
+                    for ind in active_indices:
+                        loss_range = indices_dict[ind]
+                        #print('ind, loss_range', ind, loss_range)
+                        proc_loss = value_loss[loss_range].mean() * self.value_loss_coef + \
+                                    action_loss[loss_range].mean() - \
+                                    dist_entropy[loss_range].mean() * self.entropy_coef
+                        losses[ind] = proc_loss
+                    #print('losses', losses)
+
+                    ###RECOMPUTE GRADIENTS
+                    self.balancer.step(
+                        losses = losses,
+                        shared_params = list(self.actor_critic.parameters()),
+                        task_specific_params = None
+                    )
+
+                    self.optimiser.step()
+                    loss_epoch += sum(losses.values()).item()/self.args.num_processes
 
                 else: #pcgrad, cagrad...etc
                     self.optimiser.zero_grad()
