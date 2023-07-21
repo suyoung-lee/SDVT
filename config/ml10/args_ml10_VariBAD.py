@@ -132,6 +132,9 @@ def get_args(rest_args):
     parser.add_argument('--encoder_layers_after_gru', nargs='+', type=int, default=[])
     parser.add_argument('--latent_dim', type=int, default=5, help='dimensionality of latent space')
 
+    # --- encoder: RNN type ---
+    parser.add_argument('--rnn_type', default='gru', help='gru or block-rnn')
+
     # - decoder: rewards
     parser.add_argument('--decode_reward', type=boolean_argument, default=True, help='use reward decoder')
     parser.add_argument('--normalise_rew_targets', type=boolean_argument, default=False, help='divide reward targets by largest rew seen')
@@ -232,6 +235,8 @@ def get_args(rest_args):
     # --- Gradient Correction ---
     parser.add_argument('--grad_correction', default='none', help='gradient correction method, none or pcgrad')
     parser.add_argument('--task_identification', default='none', help='unimodal has always none. mixture gaussian can have argmax, kmeans, sampling possible')
+
+
 
     return parser.parse_args(rest_args)
 

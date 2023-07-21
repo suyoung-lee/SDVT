@@ -132,6 +132,9 @@ def get_args(rest_args):
     parser.add_argument('--encoder_layers_after_gru', nargs='+', type=int, default=[])
     parser.add_argument('--latent_dim', type=int, default=10, help='dimensionality of latent space')
 
+    # --- encoder: RNN type ---
+    parser.add_argument('--rnn_type', default='gru', help='gru or block-rnn')
+
     # - decoder: rewards
     parser.add_argument('--decode_reward', type=boolean_argument, default=True, help='use reward decoder')
     parser.add_argument('--normalise_rew_targets', type=boolean_argument, default=False, help='divide reward targets by largest rew seen')
