@@ -376,13 +376,9 @@ class BlockRNNEncoder(nn.Module):
         self.input_dim = curr_input_dim
         # recurrent unit
         # TODO: TEST RNN vs GRU vs LSTM
-        self.gru = nn.GRU(input_size=curr_input_dim,
-                          hidden_size=hidden_size,
-                          num_layers=1,
-                          )
 
         #create blockRNN
-        top_k = 4
+        top_k = 50 # top_k should be less than bl_length (L)
         block_hid_dim = hidden_size #set 256
         att_layer_num = 2
         norm_type = 'post'
@@ -400,12 +396,6 @@ class BlockRNNEncoder(nn.Module):
                                      device,
                                      bl_log_sig_min,
                                      bl_log_sig_max)
-
-        for name, param in self.gru.named_parameters():
-            if 'bias' in name:
-                nn.init.constant_(param, 0)
-            elif 'weight' in name:
-                nn.init.orthogonal_(param)
 
         # fully connected layers after the recurrent cell
         curr_input_dim = hidden_size
@@ -488,9 +478,9 @@ class BlockRNNEncoder(nn.Module):
             prior_sample, prior_mean, prior_logvar, prior_hidden_state = self.prior(actions.shape[1])
             hidden_state = prior_hidden_state.clone()
 
-        print('actions', actions.shape)
-        print('states', states.shape)
-        print('rewards', rewards.shape)
+        #print('actions', actions.shape)
+        #print('states', states.shape)
+        #print('rewards', rewards.shape)
 
 
         # extract features for states, actions, rewards
@@ -502,40 +492,25 @@ class BlockRNNEncoder(nn.Module):
         # forward through fully connected layers before GRU
         for i in range(len(self.fc_before_gru)):
             h = F.relu(self.fc_before_gru[i](h))
-        print('h', h.shape)
-        '''
-        if detach_every is None:
-            # GRU cell (output is outputs for each time step, hidden_state is last output)
-            output, _ = self.gru(h, hidden_state)
-        else:
-            output = []
-            for i in range(int(np.ceil(h.shape[0] / detach_every))): #when training VAE with batch. when acting, h is always length 1
-                curr_input = h[i*detach_every:i*detach_every+detach_every]  # pytorch caps if we overflow, nice
-                curr_output, hidden_state = self.gru(curr_input, hidden_state)
-                output.append(curr_output)
-                # detach hidden state; useful for BPTT when sequences are very long
-                hidden_state = hidden_state.detach()
-            output = torch.cat(output, dim=0)
-        '''
-        self.bl_counter = 0
-        self.running_memory = torch.zeros((self.bl_length, self.args.num_processes, self.input_dim), requires_grad=True).to(device)
+        #print('h', h.shape)
+
         if h.shape[0]==1: #rollout time
-            print('rollout time')
-            print('running_memory', self.running_memory)
-            self.running_memory[self.bl_counter, :, :] = h
-            self.bl_counter+=1
-            hidden_state, _ = self.block_rnn(self.running_memory, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
-            hidden_state = hidden_state.unsqueeze(dim=0) #(1x10x256)
+            self.running_memory[self.bl_counter, :, :] = h.clone() #(self.bl_length x self.args.num_processes x self.input_dim)
+            self.bl_counter += 1
+            output = self.block_rnn(self.running_memory, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
+            output = output.unsqueeze(dim=0) #(1x10x256)
             if self.bl_counter == self.bl_length:
                 self.bl_counter = 0
                 self.running_memory = torch.zeros((self.bl_length, self.args.num_processes, self.input_dim), requires_grad=True).to(device)
+                hidden_state = output.clone()
+
         else: # udpate time
-            print('update time')
             for i in range(int(np.ceil(h.shape[0] / self.bl_length))): #when training VAE with batch. when acting, h is always length 1
                 curr_input = h[i*self.bl_length:i*self.bl_length+self.bl_length]  #(50x10x64)
-                hidden_state, _ = self.block_rnn(curr_input, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
-                hidden_state = hidden_state.unsqueeze(dim=0)
-        output = hidden_state
+                output = self.block_rnn(curr_input, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
+                output = output.unsqueeze(dim=0)
+                hidden_state = output.clone()
+
         gru_h = output.clone()
 
         # forward through fully connected layers after GRU

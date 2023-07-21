@@ -35,7 +35,7 @@ def dot_scaled_attention(
     QK_t_scaled = torch.bmm(key.permute(1, 0, 2), query.permute(1, 2, 0)) / math.sqrt(d_k)
     # shape: (batch_size, sequence_length, sequence_length)
 
-    print('attention w/o padding',  QK_t_scaled)
+    #print('attention w/o padding',  QK_t_scaled)
     if padding_mask:
         # Create causal mask to mask future timesteps
         future_mask = torch.triu(torch.ones((seq_len, seq_len)), diagonal=1).bool().to(device=QK_t_scaled.device)
@@ -43,10 +43,10 @@ def dot_scaled_attention(
 
         # Apply the mask
         QK_t_scaled = QK_t_scaled.masked_fill(future_mask, float('-inf'))
-        print('attention w/ padding', QK_t_scaled)
+        #print('attention w/ padding', QK_t_scaled)
 
     distribution = nn.functional.softmax(QK_t_scaled, dim=2)  # shape: (batch_size, sequence_length, sequence_length)
-    print('distribution', distribution)
+    #print('distribution', distribution)
 
     attention = torch.bmm(value.permute(1, 2, 0), distribution).permute(2, 0, 1)
     # shape: (sequence_length, batch_size, d_k)

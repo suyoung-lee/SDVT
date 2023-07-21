@@ -97,48 +97,36 @@ class Block_model(nn.Module):
 
         attention_matrix_align = torch.cat(attention_matrix.split(obs_block.size()[1], dim=0),
                                            2)  # (batch, trans_seq, trans_seq*n_head)
-        # print("attention_matrix_align", attention_matrix_align.shape)
-
-        # ### Pass only the largest one
-        # _, max_index = torch.max(attention_matrix_align.sum(dim=-1), dim=-1, keepdim=True)
-        # # print("top value", max_value, max_value.shape) # (batch, 1)
-        # # print("top index", max_index, max_index.shape) # (batch, 1)
-        #
-        # max_index_repeat = max_index.unsqueeze(dim=-1).repeat(1, 1, self.d_layers[0]) # (batch, 1, 256)
-        # q_output_selected = torch.gather(trans_q_output, dim=1, index=max_index_repeat).squeeze(dim=1) # (batch, hidden_dim=256)
 
         ### Pass top K elements
         batch_here = trans_q_output.shape[0]
         seq_len_here = trans_q_output.shape[1]
 
-        # print("trans_q_output", trans_q_output.shape, trans_q_output.shape[1]) # (batch=4, seq, 256)
         _, top_k_index = torch.topk(attention_matrix_align.sum(dim=-1), k=min(self.top_k, seq_len_here), dim=-1)
-        # print("top k", top_k_index.shape) # (batch, min(self.top_k, trans_q_output.shape[1]) )
-        # print()
 
         top_k_index_repeat = top_k_index.unsqueeze(dim=-1).repeat(1, 1, trans_q_output.shape[2])
         # (batch, min(self.top_k, trans_q_output.shape[1]), 256)
         top_k_q_output_selected = torch.gather(trans_q_output, dim=1, index=top_k_index_repeat)  # selected vectors
         # (batch, min(self.top_k, trans_q_output.shape[1]), 256)
-        # print("top_k_q_output_selected", top_k_q_output_selected, top_k_q_output_selected.shape)
 
         reshaped = torch.reshape(top_k_q_output_selected,
                                  (batch_here, -1))  # (batch, min(self.top_k, trans_q_output.shape[1])*256)
-        # print("reshaped init", reshaped, reshaped.shape)
+        # print("reshaped init", reshaped, reshaped.shape) Y_ns
 
         ## Padding if necessary
         if seq_len_here < self.top_k:
-            # print("Check~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             zero_pad = torch.zeros((batch_here, (self.top_k - seq_len_here) * trans_q_output.shape[2]),
                                    device=self.device)
             reshaped = torch.cat((reshaped, zero_pad), dim=-1)  # (batch, self.top_k*256)
 
         # Step 2. Here, 'block_memory' should be changed to block_variable recurrently.
-        block_memory = self.block_memory_rnn(reshaped, block_memory)  # (batch, hidden=256)
+        output = self.block_memory_rnn(reshaped, block_memory)  # (batch, hidden=256)
 
-        block_memory_ori = block_memory
+        return output
+        #block_memory_ori = block_memory
+        #return block_memory_ori, reshaped
 
-        return block_memory_ori, reshaped
+
 
     def block_mu_sig(self, block_memory):
         sig = torch.exp(self.block_sig(block_memory).clamp(self.bl_log_sig_min, self.bl_log_sig_max))
