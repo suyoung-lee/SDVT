@@ -39,7 +39,11 @@ class Block_model(nn.Module):
 
         # Define block memory
         ## Blockwise RNN. For simplicity, we use GRU. However, LSTM can also be applied.
-        self.block_memory_rnn = nn.GRUCell(self.input_dim * self.top_k, self.block_hid_dim)
+        #self.block_memory_rnn = nn.GRUCell(self.input_dim * self.top_k, self.block_hid_dim)
+        self.block_memory_rnn = nn.GRU(input_size = self.input_dim * self.top_k,
+                                       hidden_size = self.block_hid_dim,
+                                       num_layers = 1,
+                                       )
 
         ## Define Self-attention
         ## Note that the output dimension of self-attention is the same as input dimension due to Residual connection.
@@ -76,13 +80,14 @@ class Block_model(nn.Module):
         ## obs_block_ori: [ seq=L, batch=16, 64(feature)]
         ## block_memory_ori: [16, self.block_hid_dim=256]
 
-        obs_block = obs_block_ori
-        # print("obs_block", obs_block.shape)
+
+        obs_block = obs_block_ori.clone()
+        #print("obs_block", obs_block.shape)
         assert len(obs_block.size()) == 3
 
-        block_memory = block_memory_ori
-        # print("block_memory", block_memory.shape)
-        assert len(block_memory.size()) == 2
+        block_memory = block_memory_ori.clone()
+        #print("block_memory (hidden)", block_memory.shape)
+        assert len(block_memory.size()) == 3
 
         # print("block_memory first", block_memory_ori)
 
@@ -120,9 +125,16 @@ class Block_model(nn.Module):
             reshaped = torch.cat((reshaped, zero_pad), dim=-1)  # (batch, self.top_k*256)
 
         # Step 2. Here, 'block_memory' should be changed to block_variable recurrently.
-        output = self.block_memory_rnn(reshaped, block_memory)  # (batch, hidden=256)
+        reshaped = reshaped.unsqueeze(dim=0) #the input sequence(Y) length is always 1
+        #print('reshaped(input)', reshaped.shape)
+        #print('block_memory', block_memory.shape)
 
-        return output
+        output, hidden = self.block_memory_rnn(reshaped, block_memory)  # (batch, hidden=256),
+
+        #print('output', output.shape)
+        #print('hidden', hidden.shape)
+
+        return output, hidden
         #block_memory_ori = block_memory
         #return block_memory_ori, reshaped
 

@@ -629,7 +629,8 @@ class MetaLearnerML10VariBAD:
                     self.logger.add('weights/{}'.format(name), param_mean, self.iter_idx)
                     if name == 'policy':
                         self.logger.add('weights/policy_std', param_list[0].data.mean(), self.iter_idx)
+                    '''
                     if param_list[0].grad is not None:
                         param_grad_mean = np.mean(
                             [param_list[i].grad.cpu().numpy().mean() for i in range(len(param_list))])
-                        self.logger.add('gradients/{}'.format(name), param_grad_mean, self.iter_idx)
+                        self.logger.add('gradients/{}'.format(name), param_grad_mean, self.iter_idx)'''

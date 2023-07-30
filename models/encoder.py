@@ -387,6 +387,8 @@ class BlockRNNEncoder(nn.Module):
         self.bl_length = 50 #L
         self.bl_counter = 0
         self.running_memory = torch.zeros((self.bl_length, self.args.num_processes, self.input_dim), requires_grad=True).to(device)
+        self.fixed_hidden = torch.zeros((1, self.args.num_processes, hidden_size), requires_grad=True).to(device)
+
 
         self.block_rnn = Block_model(self.input_dim,
                                      top_k,
@@ -429,6 +431,7 @@ class BlockRNNEncoder(nn.Module):
             elif done.dim() == 1:
                 done = done.unsqueeze(0).unsqueeze(2)
         hidden_state = hidden_state * (1 - done)
+
         return hidden_state
 
     def prior(self, batch_size, sample=True):
@@ -494,23 +497,33 @@ class BlockRNNEncoder(nn.Module):
             h = F.relu(self.fc_before_gru[i](h))
         #print('h', h.shape)
 
+
         if h.shape[0]==1: #rollout time
+            if self.bl_counter == 0:
+                self.fixed_hidden = hidden_state.clone()
+
             self.running_memory[self.bl_counter, :, :] = h.clone() #(self.bl_length x self.args.num_processes x self.input_dim)
             self.bl_counter += 1
-            output = self.block_rnn(self.running_memory, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
-            output = output.unsqueeze(dim=0) #(1x10x256)
+            hidden_state = self.fixed_hidden.clone()
+
+            #print('self.fixed_hidden', self.fixed_hidden, self.fixed_hidden.shape)
+            #print('hidden_state', hidden_state, hidden_state.shape)
+
+            output, hidden_state = self.block_rnn(self.running_memory, hidden_state) #output: (1x10x256), (1x10x256) input: (50x10x64), (1x10x256)
+
             if self.bl_counter == self.bl_length:
                 self.bl_counter = 0
                 self.running_memory = torch.zeros((self.bl_length, self.args.num_processes, self.input_dim), requires_grad=True).to(device)
-                hidden_state = output.clone()
+            #print('output', output, output.shape)
 
         else: # udpate time
+            output = []
             for i in range(int(np.ceil(h.shape[0] / self.bl_length))): #when training VAE with batch. when acting, h is always length 1
                 curr_input = h[i*self.bl_length:i*self.bl_length+self.bl_length]  #(50x10x64)
-                output = self.block_rnn(curr_input, hidden_state.squeeze(dim=0)) #output: (10x256) input: (50x10x64), (10x256)
-                output = output.unsqueeze(dim=0)
-                hidden_state = output.clone()
-
+                curr_output, hidden_state = self.block_rnn(curr_input, hidden_state) #output: (10x256) input: (50x10x64), (10x256)
+                output.append(curr_output)
+            output = torch.cat(output, dim=0)
+            #print('output', output, output.shape)
         gru_h = output.clone()
 
         # forward through fully connected layers after GRU
