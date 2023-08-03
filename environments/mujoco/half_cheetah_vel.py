@@ -28,6 +28,9 @@ class HalfCheetahVelEnv(HalfCheetahEnv):
         self.set_task(self.sample_tasks(1)[0])
         self._max_episode_steps = max_episode_steps
         self.task_dim = 1
+
+        self.eval_task_list = [0.25, 3.25, 0.75, 1.25, 1.75, 2.25, 2.75]
+
         super(HalfCheetahVelEnv, self).__init__()
 
     def step(self, action):
@@ -48,20 +51,31 @@ class HalfCheetahVelEnv(HalfCheetahEnv):
         return observation, reward, done, infos
 
     def set_task(self, task):
-        if isinstance(task, np.ndarray):
-            task = task[0]
         self.goal_velocity = task
 
     def get_task(self):
-        return np.array([self.goal_velocity])
+        return self.goal_velocity
 
     def sample_tasks(self, n_tasks):
-        return [random.uniform(0.0, 3.0) for _ in range(n_tasks)]
+        oracle=False
+        if oracle:
+            return [random.uniform(0.0, 3.5) for _ in range(n_tasks)]
+        else:
+            vel_rand = 2.0 * random.random()
+            if vel_rand <1.0:
+                return [random.uniform(0.0, 0.5) for _ in range(n_tasks)]
+            else:
+                return [random.uniform(3.0, 3.5) for _ in range(n_tasks)]
+
+    def get_test_task_list(self):
+        return self.eval_task_list
 
     def reset_task(self, task):
         if task is None:
             task = self.sample_tasks(1)[0]
-        self.set_task(task)
+            self.set_task(task)
+        else:
+            self.set_task(self.get_test_task_list()[task])
         # self.reset()
 
 

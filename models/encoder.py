@@ -378,13 +378,13 @@ class BlockRNNEncoder(nn.Module):
         # TODO: TEST RNN vs GRU vs LSTM
 
         #create blockRNN
-        top_k = 50 # top_k should be less than bl_length (L)
+        top_k = 500 # top_k should be less than bl_length (L)
         block_hid_dim = hidden_size #set 256
         att_layer_num = 2
         norm_type = 'post'
         bl_log_sig_min = -20
         bl_log_sig_max = 2
-        self.bl_length = 50 #L
+        self.bl_length = 500 #L maybe this should be equal to the rollout episode length?
         self.bl_counter = 0
         self.running_memory = torch.zeros((self.bl_length, self.args.num_processes, self.input_dim), requires_grad=True).to(device)
         self.fixed_hidden = torch.zeros((1, self.args.num_processes, hidden_size), requires_grad=True).to(device)

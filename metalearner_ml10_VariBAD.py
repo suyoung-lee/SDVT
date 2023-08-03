@@ -585,8 +585,8 @@ class MetaLearnerML10VariBAD:
                 #    utl.save_obj(obs_rms, save_path, f"env_obs_rms{idx_label}")
 
         # --- log some other things ---
-        #if train_stats is not None and self.iter_idx>0:
-        if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
+        if train_stats is not None and self.iter_idx>0:
+        #if ((self.iter_idx + 1) % self.args.log_interval == 0) and (train_stats is not None):
 
             self.logger.add('environment/state_max', self.policy_storage.prev_state.max(), self.iter_idx)
             self.logger.add('environment/state_min', self.policy_storage.prev_state.min(), self.iter_idx)
@@ -623,6 +623,7 @@ class MetaLearnerML10VariBAD:
 
                     #print('name', name)
                     #print('model', model)
+                    #print('number of parameters', sum(p.numel() for p in model.parameters() if p.requires_grad))
                     #for i in range(len(param_list)):
                     #    print('param_list grad ',i, param_list[i].grad is not None , param_list[i].size())
 
