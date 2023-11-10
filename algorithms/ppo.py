@@ -209,6 +209,7 @@ class PPO:
 
                     loss_epoch += loss.item()
 
+                #WORK IN PROGRESS
                 elif self.args.vae_mixture_num>1 and self.args.task_identification=='argmax':
                     n=self.args.vae_mixture_num
                     subtask_indices = torch.argmax(prob_batch, dim=1)
@@ -238,6 +239,8 @@ class PPO:
                     self.optimiser.step()
                     loss_epoch += sum(losses.values()).item()/self.args.num_processes
 
+
+                # WORK IN PROGRESS
                 else: #pcgrad, cagrad...etc
                     self.optimiser.zero_grad()
 

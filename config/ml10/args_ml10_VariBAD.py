@@ -232,8 +232,8 @@ def get_args(rest_args):
     # --- Resample ---
     parser.add_argument('--resample_tasks', type=boolean_argument, default=False, help='resample tasks given first state')
 
-    # --- Gradient Correction ---
-    parser.add_argument('--grad_correction', default='none', help='gradient correction method, none or pcgrad')
+    # --- Gradient Correction ---#WORK IN PROGRESS
+    parser.add_argument('--grad_correction', default='none', help='gradient correction method: none, pcgrad, cagrad, nash, amtl')
     parser.add_argument('--task_identification', default='none', help='unimodal has always none. mixture gaussian can have argmax, kmeans, sampling possible')
 
 

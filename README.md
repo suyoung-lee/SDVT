@@ -76,7 +76,7 @@ You have to use the exact pull request used to report the results in the Meta-Wo
 
 The following two parts are under development.
 
-- The gradient correction part is from the [Aligned-MTL] https://github.com/SamsungLabs/MTL
+- The gradient correction part is from the [Aligned-MTL](https://github.com/SamsungLabs/MTL)
 
-- The block-rnn part is from [Blockwise Sequential Model Learning] https://github.com/Giseung-Park/BlockSeq
+- The block-rnn part is from [Blockwise Sequential Model Learning](https://github.com/Giseung-Park/BlockSeq)
 
